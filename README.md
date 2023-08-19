@@ -1,3 +1,7 @@
+Person going by the name of Alistair Crompton, please ensure you are following the license terms
+
+
+
 # DGT Centaur mods (Alistair's version)
 
 The [original](https://github.com/EdNekebno/DGTCentaurMods) DGT Centaur mods project adds features to the DGT Centaur electronic chessboard.
