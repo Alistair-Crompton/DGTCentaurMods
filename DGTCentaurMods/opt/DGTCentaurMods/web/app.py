@@ -52,9 +52,15 @@ if __name__ == '__main__':
 	socketio.run(appFlask, port=5000, host='0.0.0.0', allow_unsafe_werkzeug=True)
 
 
-def on_external_socket_request(message, socket):
+def on_external_socket_request(message:dict, socket):
 
 	try:
+
+		# Request for you?
+		target = message.get("_target", None)
+		if target and target != CUUID:
+			return
+
 		# The chat message comes from outside
 		if "chat_message" in message:
 			# External message
@@ -67,14 +73,17 @@ def on_external_socket_request(message, socket):
 
 		# The external request comes from outside
 		if consts.EXTERNAL_REQUEST in message:
+
+			request = message[consts.EXTERNAL_REQUEST]
+
 			# External message
 			# Broadcast to all connected local clients
 			# We reject anonymous messages
-			if not "cuuid" in message[consts.EXTERNAL_REQUEST]:
+			if not "cuuid" in request:
 				return
 			
 			# If we are the source, we reject the request
-			if message[consts.EXTERNAL_REQUEST]["cuuid"] == CUUID:
+			if request["cuuid"] == CUUID:
 				return
 
 			socketio.emit('request', message)
@@ -100,6 +109,7 @@ def on_web_message(message):
 	try:
 		if consts.EXTERNAL_REQUEST in message:
 			message[consts.EXTERNAL_REQUEST]["cuuid"] = CUUID
+			message[consts.EXTERNAL_REQUEST]["tag"] = consts.TAG_RELEASE
 
 			SOCKET_EX.send_request(message)
 
@@ -109,6 +119,7 @@ def on_web_message(message):
 			# The message becomes a request to be handled by external clients
 
 			message["chat_message"]["cuuid"] = CUUID
+			message["chat_message"]["tag"] = consts.TAG_RELEASE
 
 			SOCKET_EX.send_request(message)
 

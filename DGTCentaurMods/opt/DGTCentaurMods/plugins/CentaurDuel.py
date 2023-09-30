@@ -68,13 +68,13 @@ class _MoveAck():
     def check(self, uci_move) -> bool:
         return uci_move == self._uci_move
     
-    def retry(self):
+    def retry(self, target_cuuid:str):
         self._tries += 1
         if self._tries > MAX_ACK_RETRIES:
             raise Exception(f'Tried {MAX_ACK_RETRIES} times to send the move "{self._san_move}" to the opponent but received no ACK!')
         
         Log.debug(f'Retry #{self._tries} : resending your move "{self._uci_move}/{self._san_move}"...')
-        Centaur.send_external_request({ "type":DUEL_MOVE, "color":self._color, "san_move":self._san_move, "uci_move":self._uci_move })
+        Centaur.send_external_request({ "type":DUEL_MOVE, "color":self._color, "san_move":self._san_move, "uci_move":self._uci_move }, target_cuuid=target_cuuid)
 
 # Main plugin
 class CentaurDuel(Plugin):
@@ -99,7 +99,7 @@ class CentaurDuel(Plugin):
         # we quit the plugin.
         if event == Enums.Event.QUIT:
             # We send a notification to the opponent.
-            Centaur.send_external_request({ "type":DUEL_ABORTED, "username":USERNAME })
+            Centaur.send_external_request({ "type":DUEL_ABORTED, "username":USERNAME }, target_cuuid=self._opponent_cuuid)
             self.stop()
 
         # End game.
@@ -128,7 +128,7 @@ class CentaurDuel(Plugin):
             # TODO make that part asynchronous.
             while self._mode == PENDING_MOVE_ACK:
                 if self._expected_ack.is_outdated():
-                    self._expected_ack.retry()
+                    self._expected_ack.retry(target_cuuid=self._opponent_cuuid)
                 time.sleep(.1)
 
 
@@ -141,7 +141,7 @@ class CentaurDuel(Plugin):
 
             Log.debug(f'Sending your move "{uci_move}/{san_move}" to "{self._opponent_username}"...')
 
-            Centaur.send_external_request({ "type":DUEL_MOVE, "color":color, "san_move":san_move, "uci_move":uci_move })
+            Centaur.send_external_request({ "type":DUEL_MOVE, "color":color, "san_move":san_move, "uci_move":uci_move }, target_cuuid=self._opponent_cuuid)
 
             # Waiting for ack.
             self._mode = PENDING_MOVE_ACK
@@ -205,7 +205,7 @@ class CentaurDuel(Plugin):
                         Centaur.play_computer_move(uci_move)
 
                         # We send back the move acknowledgement.
-                        Centaur.send_external_request({ "type":DUEL_MOVE_ACK, "uci_move":uci_move })
+                        Centaur.send_external_request({ "type":DUEL_MOVE_ACK, "uci_move":uci_move }, target_cuuid=self._opponent_cuuid)
 
                 # Move acknowledgement.
                 # Your opponent received your move.
@@ -264,7 +264,7 @@ class CentaurDuel(Plugin):
                 # We send back a duel acknowledgement.
                 # (that contains the opponent color)
                 if request_type != DUEL_ACK:
-                    Centaur.send_external_request({ "type":DUEL_ACK, "color":not self.YOUR_COLOR, "username":USERNAME })
+                    Centaur.send_external_request({ "type":DUEL_ACK, "color":not self.YOUR_COLOR, "username":USERNAME }, target_cuuid=OPPONENT_CUUID)
                 
                 self._opponent_username = OPPONENT
                 self._opponent_cuuid = OPPONENT_CUUID

@@ -62,9 +62,15 @@ class Centaur():
         return CentaurConfig
 
     @staticmethod
-    def send_external_request(request:dict):
+    def send_external_request(request:dict, target_cuuid:Optional[str] = None):
+
+        # We add the plugin origin
         request["_plugin"] = Centaur._plugin.__class__.__name__
-        SOCKET.send_web_message({ consts.EXTERNAL_REQUEST: request })
+
+        # We add the target if available
+        message = { consts.EXTERNAL_REQUEST: request, "_target": target_cuuid }
+
+        SOCKET.send_web_message(message)
 
     @staticmethod
     def push_button(button:Enums.Btn):
