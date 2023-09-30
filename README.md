@@ -1,12 +1,12 @@
-# DGT Centaur mods (Alistair's version)
+# Alistair DGT Centaur mods
 
 <img src="https://github.com/Alistair-Crompton/DGTCentaurMods/blob/master/screenshots/shot_1.jpg?raw=true" style="width:75%"/>
 
 The [original](https://github.com/EdNekebno/DGTCentaurMods) DGT Centaur mods project adds features to the DGT Centaur electronic chessboard.
 
-Inside the DGT Centaur is a Raspberry Pi Zero with an SD Card, by replacing that with a Raspberry Pi Zero 2 W (or Raspberry Pi Zero W) and using a modified software, we get a wireless enabled chessboard that can theoretically do practically anything we can imagine.
-
 **This current project overrides the legacy one, re-coding and re-factoring all the unstable scripts, adding new features.**
+
+Inside the DGT Centaur is a Raspberry Pi Zero with an SD Card, by replacing that with a Raspberry Pi Zero 2 W (or Raspberry Pi Zero W) and using a modified software, we get a wireless enabled chessboard that can be easily extended and improved.
 
 **A word of caution!**
 
@@ -59,18 +59,24 @@ wget -O ./_DGTCentaurMods_A.alpha-latest.deb `curl -s https://api.github.com/rep
 sudo apt install -y ./_DGTCentaurMods_A.alpha-latest.deb
 ```
 
+3. Reboot:
+
+```
+sudo reboot
+```
+
 ## This project uses...
 
 - [Python 3](https://www.python.org/)
 - [Waveshare e-Paper driver](https://github.com/waveshareteam/e-Paper)
 - [Pillow library](https://pypi.org/project/Pillow/)
-- [python-chess library](https://python-chess.readthedocs.io/)
-- [berserk library](https://pypi.org/project/berserk/)
+- [Python-chess library](https://python-chess.readthedocs.io/)
+- [Berserk library](https://pypi.org/project/berserk/)
 - [AngularJS](https://angularjs.org/)
-- [chessboard.js](https://chessboardjs.com/)
+- [Chessboard.js](https://chessboardjs.com/)
 - [Flask server](https://flask.palletsprojects.com/)
-- [flask-socketio library](https://flask-socketio.readthedocs.io/)
-- [wpa-pyfi](https://pypi.org/project/wpa-pyfi/)
+- [Flask-socketio library](https://flask-socketio.readthedocs.io/)
+- [Wpa-pyfi](https://pypi.org/project/wpa-pyfi/)
 
 - [Maia chess engine](https://maiachess.com/)
 - [Rodent IV chess engine](https://github.com/nescitus/rodent-iv)
@@ -80,7 +86,7 @@ sudo apt install -y ./_DGTCentaurMods_A.alpha-latest.deb
 - [Texel chess engine](https://github.com/peterosterlund2/texel)
 - [WyldChess chess engine](https://github.com/Mk-Chan/WyldChess)
 - [Stockfish chess engine](https://stockfishchess.org/)
-
+- [WASM implementation of Stockfish](https://github.com/nmrugg/stockfish.js)
 - DGT Centaur board Reverse engineering work of the [original](https://github.com/EdNekebno/DGTCentaurMods) project
 
 ## Support & Requests
@@ -104,6 +110,7 @@ Few examples of plugins are available, they show the basic structure of a plugin
 
 - "SQuiz" is a plugin that allows the player to memorize the squares of the chessboard.
 - "Althoff bot" is an adaptative bot that can make blunders and update its level according to the position evaluation.
+- "El Professor" is a bot that corrects your mistakes/blunders while playing.
 
 Here is an example of a "Random bot" that plays random moves:
 
