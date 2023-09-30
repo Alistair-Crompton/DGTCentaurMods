@@ -15,17 +15,21 @@ console.log("PORT (ENV):"+process.env.PORT)
 console.log("PORT:"+port)
 console.log("PGSTRING:"+connectionString)
 
-const { Pool } = require('pg')
+const { Pool, Client } = require('pg')
 
 const pool = new Pool({ connectionString })
-
-const SERVER_BOT = 'ADMIN BOT'
-
-var SERVER_CUUID = null
 
 pool.on('error', (e, client) => {
     console.error('DB Error:', e)
 })
+
+//app.get('/', (req, res) => {
+//    res.send('<h2>Alistair-Centaur-Mods socket.io server</h2>')
+//})
+
+const SERVER_BOT = 'ADMIN BOT'
+
+var SERVER_CUUID = null
 
 //app.get('/', (req, res) => {
 //    res.send('<h2>Alistair-Centaur-Mods socket.io server</h2>')
