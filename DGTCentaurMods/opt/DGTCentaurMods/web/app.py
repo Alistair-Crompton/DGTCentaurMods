@@ -62,11 +62,11 @@ def on_external_socket_request(message:dict, socket):
 			return
 
 		# The chat message comes from outside
-		if "chat_message" in message:
+		if consts.CHAT_MESSAGE in message:
 			# External message
 			# Broadcast to all connected local clients
 			# We reject anonymous messages
-			if not "cuuid" in message["chat_message"]:
+			if not "cuuid" in message[consts.CHAT_MESSAGE]:
 				return
 
 			socketio.emit('web_message', message)
@@ -114,12 +114,12 @@ def on_web_message(message):
 			SOCKET_EX.send_request(message)
 
 		# The chat message comes from inside
-		elif "chat_message" in message:
+		elif consts.CHAT_MESSAGE in message:
 			# Broadcast to all connected external clients
 			# The message becomes a request to be handled by external clients
 
-			message["chat_message"]["cuuid"] = CUUID
-			message["chat_message"]["tag"] = consts.TAG_RELEASE
+			message[consts.CHAT_MESSAGE]["cuuid"] = CUUID
+			message[consts.CHAT_MESSAGE]["tag"] = consts.TAG_RELEASE
 
 			SOCKET_EX.send_request(message)
 
