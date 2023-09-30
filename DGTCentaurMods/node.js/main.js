@@ -15,13 +15,9 @@ console.log("PORT (ENV):"+process.env.PORT)
 console.log("PORT:"+port)
 console.log("PGSTRING:"+connectionString)
 
-const { Pool } = require('pg')
+const { Pool, Client } = require('pg')
 
 const pool = new Pool({ connectionString })
-
-const SERVER_BOT = 'ADMIN BOT'
-
-var SERVER_CUUID = null
 
 pool.on('error', (e, client) => {
     console.error('DB Error:', e)
@@ -31,7 +27,42 @@ pool.on('error', (e, client) => {
 //    res.send('<h2>Alistair-Centaur-Mods socket.io server</h2>')
 //})
 
+async function main(){
+
+    const client = new Client({ connectionString })
+ 
+    try {
+
+        //const result = await pool.query('SELECT NOW()')
+        //console.log(result.rows[0])
+
+        await client.connect()
+        console.log('Database Connected.')
+
+        const result = await client.query("SELECT cuuid FROM public.users WHERE tag=$1", [SERVER_BOT])
+        console.log(result.rows[0])
+
+    } catch (e) {
+        console.error(e)
+    } finally {
+        //await client.end()
+        console.log('Done.')
+    }
+}
+ 
+main().catch(console.error)
+
+const SERVER_BOT = 'ADMIN BOT'
+
+var SERVER_CUUID = null
+
+//app.get('/', (req, res) => {
+//    res.send('<h2>Alistair-Centaur-Mods socket.io server</h2>')
+//})
+
 async function read_server_bot_cuuid() {
+
+    return
 
     const result = await pool.query("SELECT cuuid FROM public.users WHERE tag=$1", [SERVER_BOT])
 
@@ -63,6 +94,7 @@ async function broadcast_message(socket, _message, event, chatLockedFeedback){
         // Unknown or incomplete message
         if (!message || !message.cuuid || !message.tag) return
 
+        /*
         // Server impersonation not allowed
         if (message.cuuid == SERVER_CUUID) return
 
@@ -98,7 +130,7 @@ async function broadcast_message(socket, _message, event, chatLockedFeedback){
                 socket.emit(event, { _target:message.cuuid, chat_message:{ cuuid:SERVER_CUUID, author:SERVER_BOT, tag:message.tag, message:'You have been LOCKED - Please contact an admin.'}})
             }
             return
-        }
+        }*/
 
         // We can broadcast the message
         io.emit(event, _message)
