@@ -379,3 +379,7 @@ def on_request(message):
 @appFlask.route("/")
 def index():
 	return render_template('2.0/index.html', data={"title":consts.WEB_NAME, "boardsize": 550, "iconsize": int(550/9)})
+	
+@appFlask.route("/vuejs/")
+def vuejs():
+	return render_template('vuejs/index.html', data={"title":consts.WEB_NAME})

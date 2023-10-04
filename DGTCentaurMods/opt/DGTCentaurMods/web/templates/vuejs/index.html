@@ -1,0 +1,17 @@
+<script type="importmap">
+    {
+        "imports": {
+        "vue": "{{ url_for('static', filename='vuejs/vue.js') }}"
+        }
+    }
+</script>
+
+<div id="centaur-web"></div>
+
+<script type="module">
+  import { createApp } from 'vue'
+
+  import MainComponent from "{{ url_for('static', filename='vuejs/components/main.js') }}"
+
+  createApp(MainComponent).mount('#centaur-web')
+</script>
