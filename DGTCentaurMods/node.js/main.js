@@ -70,7 +70,7 @@ async function broadcast_message(socket, _message, event, chatLockedFeedback){
         // Server impersonation not allowed
         if (message.cuuid == SERVER_CUUID) return
 
-        const remoteAddress = socket.handshake.address
+        const remoteAddress = socket.handshake.headers["x-forwarded-for"].split(",")[0]
 
         const result = await pool.query("SELECT tag, remote_address, locked FROM public.users WHERE cuuid=$1 OR remote_address=$2", [message.cuuid, remoteAddress])
 
