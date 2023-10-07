@@ -91,6 +91,15 @@ class Centaur():
         Centaur._current_row += 1
 
     @staticmethod
+    def print_option_label(text:str="", row:float = -1, checked:bool=False):
+        if row>-1:
+            Centaur._current_row = row
+    
+        SCREEN.write_text(Centaur._current_row, text, option=checked)
+
+        Centaur._current_row += .65
+
+    @staticmethod
     def messagebox(text_lines:Tuple[str,...], row:float=8, tick_button:bool=False):
         SCREEN.draw_messagebox(text_lines, row=row, tick_button=tick_button)
 

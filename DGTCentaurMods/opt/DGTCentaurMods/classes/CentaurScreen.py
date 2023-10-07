@@ -299,6 +299,10 @@ class CentaurScreen(common.Singleton):
     def _draw_down_button(self, canvas, x):
         canvas.polygon(
             [(x, 3), (x+16, 3), (x+8, 18)], fill=0)
+
+    def _draw_play_button(self, canvas, x):
+        canvas.polygon(
+            [(x, 18), (x+14, 10), (x, 2)], fill=0)
         
     def draw_button_label(self, button:Enums.Btn, text:str, row:float, x:int):
 
@@ -312,6 +316,7 @@ class CentaurScreen(common.Singleton):
             Enums.Btn.DOWN:self._draw_down_button,
             Enums.Btn.BACK:self._draw_back_button,
             Enums.Btn.TICK:self._draw_tick_button,
+            Enums.Btn.PLAY:self._draw_play_button,
         
         }.get(button, None)
         

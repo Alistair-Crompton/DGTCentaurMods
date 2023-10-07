@@ -306,7 +306,7 @@ class CentaurDuel(Plugin):
             Centaur.send_external_request({ "type":SPECIFIC_DUEL_REQUEST, "color":chess.WHITE, "username":USERNAME })
             return True
 
-        elif key == Enums.Btn.TICK or key == key == Enums.Btn.PLAY:
+        elif key in (Enums.Btn.TICK, Enums.Btn.PLAY):
 
             self._screen_any_duel_request()
 
