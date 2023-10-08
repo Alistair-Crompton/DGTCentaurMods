@@ -368,68 +368,51 @@ class TeamPlay(Plugin):
         # Waiting for computer move?
         if self._status == PENDING_COMPUTER_MOVE:
             return False
+        
+        def _send_move_to_other_players(username:str, player_id:int):
+
+            # If the game has players from outside,
+            # then we send the move and ask for a move acknowledgement
+            # for each player.
+            if len(self._players_cuuid) >0:
+
+                # We send the move to all players but us.
+                Log.debug(f'Sending the move "{uci_move}/{san_move}"...')
+
+                move_message = {
+                    "type":GAME_MOVE,
+                    MASTER_CUUID:self._master_cuuid,
+                    USERNAME:username,
+                    COLOR:color,
+                    "san_move":san_move,
+                    "uci_move":uci_move,
+                    PLAYER_ID:player_id }
+                
+                # Waiting for acks.
+                self._status = PENDING_MOVE_ACK
+                self._expected_ack.update(self._players_cuuid, move_message)
 
         # Your move?
         if self._player_id == current_player[PLAYER_ID]:
 
-            # If the game has players from outside,
-            # then we send the move and ask for a move acknowledgement
-            # for each player.
-            if len(self._players_cuuid) >0:
+            _send_move_to_other_players(LICHESS_USERNAME, self._player_id)
 
-                # We send the move to all players but us.
-                Log.debug(f'Sending your move "{uci_move}/{san_move}"...')
-
-                move_message = {
-                    "type":GAME_MOVE,
-                    MASTER_CUUID:self._master_cuuid,
-                    USERNAME:LICHESS_USERNAME,
-                    COLOR:color,
-                    "san_move":san_move,
-                    "uci_move":uci_move,
-                    PLAYER_ID:self._player_id }
-
-                Centaur.send_external_request(move_message)
-
-                # Waiting for acks.
-                self._status = PENDING_MOVE_ACK
-                self._expected_ack.update(self._players_cuuid, move_message)
-
-            # Next player...
+            # Next player to play...
             self._increase_sequence_index()
 
             return True
         
+        # Computer move?
         elif self._is_master and current_player[PLAYER_ID] == CPU and Centaur.computer_move_is_ready():
 
-            # If the game has players from outside,
-            # then we send the move and ask for a move acknowledgement
-            # for each player.
-            if len(self._players_cuuid) >0:
-                # We send the move to all players but us.
-                Log.debug(f'Sending computer move "{uci_move}/{san_move}"...')
+            _send_move_to_other_players(COMPUTER_NAME, CPU)
 
-                move_message = {
-                    "type":GAME_MOVE,
-                    MASTER_CUUID:self._master_cuuid,
-                    USERNAME:COMPUTER_NAME,
-                    COLOR:color,
-                    "san_move":san_move,
-                    "uci_move":uci_move,
-                    PLAYER_ID:CPU }
-
-                Centaur.send_external_request(move_message)
-
-                # Waiting for acks.
-                self._status = PENDING_MOVE_ACK
-                self._expected_ack.update(self._players_cuuid, move_message)
-
-            # Next player...
+            # Next player to play...
             self._increase_sequence_index()
 
             return True
         
-        # (from engine perspective, opponent == computer)
+        # External player move?
         elif Centaur.computer_move_is_ready():
 
             # We send back the move acknowledgement.
@@ -553,9 +536,6 @@ class TeamPlay(Plugin):
                 # SPECIFIC_GAME_REQUEST == You choose specific game and color.
                 # GAME_REQUEST == You don't care about the game and color.
 
-                # Statuses chronology
-                # GAME_ACK > GAME_UPDATE > GAME_START
-
                 # Only simple game requests and game acknowledgements are accepted there.
                 if self._status == MASTER and request_type not in (GAME_REQUEST, GAME_ACK, GAME_START):
                     return
@@ -570,7 +550,7 @@ class TeamPlay(Plugin):
                 # Did we start a game as master?
                 if self._status == MASTER:
                     if request_type in (GAME_ACK, GAME_REQUEST):
-                        self._handle_slave_request(USERNAME, REQUEST_CUUID)
+                        self._handle_slave_request(PLAYER_NAME, REQUEST_CUUID)
 
                         return
 
