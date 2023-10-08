@@ -301,6 +301,12 @@ class Plugin():
                 CENTAUR_BOARD.push_button(Enums.Btn(data["web_button"]))
                 del data["web_button"]
 
+            if consts.BOT_MESSAGE in data:
+
+                Log.info(f"Bot command -> {data[consts.BOT_MESSAGE]}")
+
+                self.on_bot_request(data[consts.BOT_MESSAGE])
+
             # Plugin needs to be started to 
             # receive socket requests.
             if self._started:
@@ -384,11 +390,17 @@ class Plugin():
         
         return False
     
-    def __socket_callback(self, data:dict, _):
+    def __socket_callback(self, data:dict, _) -> bool:
 
         try:
-            if self._started and len(data.keys())>0:
-                return self.on_socket_request(data)
+            if len(data.keys())>0:
+
+                if consts.BOT_MESSAGE in data:
+                    self.on_bot_request(data[consts.BOT_MESSAGE])
+                    return True
+
+                if self._started:
+                    return self.on_socket_request(data)
         
         except:
             SOCKET.send_web_message({ "script_output":Log.last_exception() })
@@ -504,6 +516,9 @@ class Plugin():
         return True
     
     def on_socket_request(self, data:dict):
+        return
+    
+    def on_bot_request(self, data:list):
         return
 
     def splash_screen(self) -> bool:

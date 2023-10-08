@@ -84,8 +84,8 @@ class _SocketClient(common.Singleton):
             if self._socket != None:
                 self._socket.emit('request', request)
 
-        except:
-            Log.info("Socket disconnected...")
+        except Exception as e:
+            Log.info(f"Socket disconnected:{e}")
             pass
 
     def send_web_message(self, message):
@@ -94,7 +94,7 @@ class _SocketClient(common.Singleton):
                 self._socket.emit('web_message', message)
 
         except Exception as e:
-            Log.info("Socket disconnected...")
+            Log.info(f"Socket disconnected:{e}")
             pass
 
     def disconnect(self):
