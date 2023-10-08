@@ -336,9 +336,6 @@ class CentaurScreen(common.Singleton):
             if text_lines[length-1] == None:
                 row_offset = .5
 
-            # Last empty half row of the box
-            #self.write_text(length+row+1.8, consts.EMPTY_LINE)
-
             self.write_text(row+.5, consts.EMPTY_LINE)
             for index in range(length):
                 self.write_text(index+row+1+row_offset, text_lines[index] or consts.EMPTY_LINE)
@@ -347,7 +344,7 @@ class CentaurScreen(common.Singleton):
                 index += 1
                 self.draw_button_label(button=Enums.Btn.TICK, text="OK", row=row+index+row_offset+1.2, x=38)
 
-            self.draw_rectangle(0,HEADER_HEIGHT*(row+1),SCREEN_WIDTH-1,(row+index+2.2)*HEADER_HEIGHT)
+            self.draw_rectangle(0,HEADER_HEIGHT*(row+1),SCREEN_WIDTH-1,(row+index+1.9)*HEADER_HEIGHT)
 
         except Exception as e:
             Log.exception(CentaurScreen.draw_messagebox, e)

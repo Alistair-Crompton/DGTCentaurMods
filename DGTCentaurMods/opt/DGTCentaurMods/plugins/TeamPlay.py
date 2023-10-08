@@ -27,16 +27,23 @@ from DGTCentaurMods.consts import Enums, fonts, consts
 
 from typing import Optional, List
 
+from enum import Enum
+
 # Local constants.
 (SPECIFIC_GAME_REQUEST, GAME_REQUEST, GAME_ACK, GAME_MOVE, GAME_MOVE_ACK, GAME_ABORTED, GAME_START) = range(0,7)
 
 (INITIALIZING, MASTER, SLAVE, GAME_RUNNING, PENDING_MOVE_ACK, PENDING_COMPUTER_MOVE) = range(0,6) 
 
-(MSTR,_,_,_,CPU) = range(0,5)
+# Player types
+(NONE,YOU,P1,P2,P3,P4,P5,P6,CPU) = range(0,9)
+
+# Only there for conversion purposes...
+# TODO: use it everywere and handle enum serialization.
+PlayerType = Enum('PlayerType', ['YOU','P1','P2','P3','P4','P5','P6','CPU'])
 
 WAIT_FOR_REQUEST = -1
 
-# Field names
+# Field names.
 PLAYER_DATA = "player_data"
 PLAYER_ID = "player_id"
 MASTER_CUUID = "master_cuuid"
@@ -114,58 +121,47 @@ class _MoveAck():
 GAME_SEQUENCES = (
     {
         "label":"You versus 2",
-        "sequence":(MSTR,1,MSTR,2),
-        COLOR:chess.WHITE,
+        "sequence":(YOU,P1,YOU,P2)
     },
     {
         "label":"2 versus you",
-        "sequence":(1,MSTR,2,MSTR),
-        COLOR:chess.BLACK,
+        "sequence":(P1,YOU,P2,YOU)
     },
     {
         "label":"You+1 versus 1",
-        "sequence":(MSTR,1,2,1),
-        COLOR:chess.WHITE,
+        "sequence":(YOU,P1,P2,P1)
     },
     {
         "label":"You+1 versus 2",
-        "sequence":(MSTR,1,2,3),
-        COLOR:chess.WHITE,
+        "sequence":(YOU,P1,P2,P3)
     },
     {
         "label":"2 versus you+1",
-        "sequence":(1,MSTR,2,3),
-        COLOR:chess.BLACK,
+        "sequence":(P1,YOU,P2,P3)
     },
     {
         "label":f"You+1 versus {COMPUTER_NAME}",
-        "sequence":(MSTR,CPU,1,CPU),
-        COLOR:chess.WHITE,
+        "sequence":(YOU,CPU,P1,CPU)
     },
     {
         "label":f"{COMPUTER_NAME} versus you+1",
-        "sequence":(CPU,MSTR,CPU,1),
-        COLOR:chess.BLACK,
+        "sequence":(CPU,YOU,CPU,P1)
     },
     {
         "label":f"You+{COMPUTER_NAME} versus 1",
-        "sequence":(MSTR,1,CPU,1),
-        COLOR:chess.WHITE,
+        "sequence":(YOU,P1,CPU,P1)
     },
     {
         "label":f"You+{COMPUTER_NAME} versus 2",
-        "sequence":(MSTR,1,CPU,2),
-        COLOR:chess.WHITE,
+        "sequence":(YOU,P1,CPU,P2)
     },
     {
         "label":f"1 versus You+{COMPUTER_NAME}",
-        "sequence":(1,MSTR,1,CPU),
-        COLOR:chess.BLACK,
+        "sequence":(P1,YOU,P1,CPU)
     },
     {
         "label":f"2 versus You+{COMPUTER_NAME}",
-        "sequence":(1,MSTR,2,CPU),
-        COLOR:chess.BLACK,
+        "sequence":(P1,YOU,P2,CPU)
     },
 )
 
@@ -178,12 +174,12 @@ class TeamPlay(Plugin):
 
     _game = WAIT_FOR_REQUEST
 
-    _player_id = -1
+    _player_id:int = NONE
 
     _sequence_index = 0
     
     _players_sequence = []
-    _players_cuuid = []
+    _players_cuuid:List[str] = []
 
     _teams_displayed = False
 
@@ -197,21 +193,22 @@ class TeamPlay(Plugin):
         
         self._teams_displayed = True
 
-        color = self.YOUR_COLOR
+        text_lines = []
 
-        for iplayer in enumerate(self._teams[not color]):
-            print(row=2.25+iplayer[0])
-            print(text=iplayer[1], row=2.25+iplayer[0], font=fonts.MEDIUM_MAIN_FONT)
+        for player in self._teams[chess.WHITE]:
+            text_lines.append(player)
 
-        print(text="versus", row=4.75)
+        text_lines.append("vs")
 
-        for iplayer in enumerate(self._teams[color]):
-            print(row=6.25+iplayer[0])
-            print(text=iplayer[1], row=6.25+iplayer[0], font=fonts.MEDIUM_MAIN_FONT)
+        for player in self._teams[chess.BLACK]:
+            text_lines.append(player)
+
+        Centaur.messagebox(text_lines=text_lines, row=0)
 
     def _init_players_cuuid_from_players_sequence(self):
         self._players_cuuid = list(dict.fromkeys(list(p["cuuid"] for p in self._players_sequence)))
-        self._players_cuuid.remove(CUUID)
+        if CUUID in self._players_cuuid:
+            self._players_cuuid.remove(CUUID)
 
     def _increase_sequence_index(self):
         # Next player to play...
@@ -228,7 +225,55 @@ class TeamPlay(Plugin):
         
         # Key can be handled by the engine.
         return False
-        
+    
+    # This function is automatically invoked each
+    # time the player send a bot command from the chat window.
+    def on_bot_request(self, data:List[str]):
+
+        if self._started:
+            return
+
+        global LICHESS_USERNAME
+
+        if data[0] == "@username" and len(data)>1:
+            LICHESS_USERNAME = data[1]
+            Log.info(f'Username has been updated to "{LICHESS_USERNAME}"')
+
+        if data[0] == "@start" and len(data)>2:
+
+            data.pop(0)
+
+            def _to_int(value:str) -> int:
+                try:
+                    return PlayerType[value.upper()].value
+                except:
+                    return NONE
+                
+            # We convert to integer values.
+            int_values = list(map(_to_int, data))
+
+            # We keep only the correct values.
+            sequence = list(filter(lambda item:item != NONE, int_values))
+
+            # If we have an odd sequence, we add a player.
+            if len(sequence) %2 == 1:
+                sequence.append(CPU)
+
+            if len(sequence)>1:
+
+                Log.info(f"Game sequence has been updated to {sequence}")
+
+                self._launch_game_request(sequence)
+                self._started = True
+                
+                # Ready to go?
+                # If we don't need external players,
+                # then we start right now.
+                if 0 == len(list(
+                    filter(lambda p:p not in (YOU, CPU), sequence)
+                )):
+                    self._handle_slave_request(None, None)
+
     # When exists, this function is automatically invoked
     # when the game engine state is affected.
     def event_callback(self, event:Enums.Event, outcome:Optional[chess.Outcome]):
@@ -266,18 +311,20 @@ class TeamPlay(Plugin):
             Centaur.header(
                 text=f"{current_player[USERNAME]} {'W' if current_player[COLOR] == chess.WHITE else 'B'}",
                 web_text=f"turn → {current_player[USERNAME]} {'(WHITE)' if current_player[COLOR]  == chess.WHITE else '(BLACK)'}")
-            
-            Log.debug("Pending for move acknowledgement...")
+
             Centaur.messagebox(("Waiting","for other","players..."))
 
-            # Pending for move acknowledgement?
-            # TODO make that part asynchronous.
-            while self._status == PENDING_MOVE_ACK and self._running():
-                if self._expected_ack.is_outdated():
-                    self._expected_ack.retry()
-                time.sleep(.1)
+            if self._status == PENDING_MOVE_ACK:
+                Log.debug("Pending for move acknowledgement...")
 
-            Log.debug("All players acknowledged the move...")
+                # Pending for move acknowledgement?
+                # TODO make that part asynchronous.
+                while self._status == PENDING_MOVE_ACK and self._running():
+                    if self._expected_ack.is_outdated():
+                        self._expected_ack.retry()
+                    time.sleep(.1)
+
+                Log.debug("All players acknowledged the move...")
 
             color = 'white' if current_player[COLOR] else 'black'
 
@@ -325,23 +372,28 @@ class TeamPlay(Plugin):
         # Your move?
         if self._player_id == current_player[PLAYER_ID]:
 
-            # We send the move to all players but us.
-            Log.debug(f'Sending your move "{uci_move}/{san_move}"...')
+            # If the game has players from outside,
+            # then we send the move and ask for a move acknowledgement
+            # for each player.
+            if len(self._players_cuuid) >0:
 
-            move_message = {
-                "type":GAME_MOVE,
-                MASTER_CUUID:self._master_cuuid,
-                USERNAME:LICHESS_USERNAME,
-                COLOR:color,
-                "san_move":san_move,
-                "uci_move":uci_move,
-                PLAYER_ID:self._player_id }
+                # We send the move to all players but us.
+                Log.debug(f'Sending your move "{uci_move}/{san_move}"...')
 
-            Centaur.send_external_request(move_message)
+                move_message = {
+                    "type":GAME_MOVE,
+                    MASTER_CUUID:self._master_cuuid,
+                    USERNAME:LICHESS_USERNAME,
+                    COLOR:color,
+                    "san_move":san_move,
+                    "uci_move":uci_move,
+                    PLAYER_ID:self._player_id }
 
-            # Waiting for acks.
-            self._status = PENDING_MOVE_ACK
-            self._expected_ack.update(self._players_cuuid, move_message)
+                Centaur.send_external_request(move_message)
+
+                # Waiting for acks.
+                self._status = PENDING_MOVE_ACK
+                self._expected_ack.update(self._players_cuuid, move_message)
 
             # Next player...
             self._increase_sequence_index()
@@ -350,23 +402,27 @@ class TeamPlay(Plugin):
         
         elif self._is_master and current_player[PLAYER_ID] == CPU and Centaur.computer_move_is_ready():
 
-            # We send the move to all players but us.
-            Log.debug(f'Sending computer move "{uci_move}/{san_move}"...')
+            # If the game has players from outside,
+            # then we send the move and ask for a move acknowledgement
+            # for each player.
+            if len(self._players_cuuid) >0:
+                # We send the move to all players but us.
+                Log.debug(f'Sending computer move "{uci_move}/{san_move}"...')
 
-            move_message = {
-                "type":GAME_MOVE,
-                MASTER_CUUID:self._master_cuuid,
-                USERNAME:COMPUTER_NAME,
-                COLOR:color,
-                "san_move":san_move,
-                "uci_move":uci_move,
-                PLAYER_ID:CPU }
+                move_message = {
+                    "type":GAME_MOVE,
+                    MASTER_CUUID:self._master_cuuid,
+                    USERNAME:COMPUTER_NAME,
+                    COLOR:color,
+                    "san_move":san_move,
+                    "uci_move":uci_move,
+                    PLAYER_ID:CPU }
 
-            Centaur.send_external_request(move_message)
+                Centaur.send_external_request(move_message)
 
-            # Waiting for acks.
-            self._status = PENDING_MOVE_ACK
-            self._expected_ack.update(self._players_cuuid, move_message)
+                # Waiting for acks.
+                self._status = PENDING_MOVE_ACK
+                self._expected_ack.update(self._players_cuuid, move_message)
 
             # Next player...
             self._increase_sequence_index()
@@ -514,94 +570,9 @@ class TeamPlay(Plugin):
                 # Did we start a game as master?
                 if self._status == MASTER:
                     if request_type in (GAME_ACK, GAME_REQUEST):
+                        self._handle_slave_request(USERNAME, REQUEST_CUUID)
 
-                        sequence = GAME_SEQUENCES[self._game]["sequence"]
-
-                        Log.debug(f"game sequence={sequence}")
-
-                        def _add_player() -> bool:
-
-                            index = len(self._players_sequence)
-
-                            # If index is even - color is white.
-                            current_color = (index % 2) == 0
-
-                            player_id = sequence[index]
-
-                            if index<len(sequence) and player_id == MSTR:
-                                # You.
-                                self._players_sequence.append({
-                                    USERNAME:LICHESS_USERNAME,
-                                    PLAYER_ID:MSTR,
-                                    COLOR:current_color,
-                                    "cuuid":CUUID,
-                                })
-
-                                return True
-                            
-                            if index<len(sequence) and player_id == CPU:
-                                # Computer.
-                                self._players_sequence.append({
-                                    USERNAME:COMPUTER_NAME,
-                                    PLAYER_ID:CPU,
-                                    COLOR:current_color,
-                                    "cuuid":CUUID,
-                                })
-                                return True
-                            
-                            # Player already connected?
-                            connected_player = list(filter(lambda p:p[PLAYER_ID] == player_id, self._players_sequence))
-                            
-                            if len(connected_player):
-                                self._players_sequence.append(connected_player[0])
-                                return True
-
-                            if self._player_added:
-                                return False
-                            
-                            # New player.
-                            p = {
-                                USERNAME:PLAYER_NAME,
-                                PLAYER_ID:player_id,
-                                COLOR:current_color,
-                                "cuuid":REQUEST_CUUID,
-                            }
-                            self._players_sequence.append(p)
-
-                            # We send back the player data.
-                            Centaur.send_external_request({ "type":GAME_ACK, PLAYER_DATA:p }, target_cuuid=REQUEST_CUUID)
-
-                            self._player_added = True
-
-                            return True
-
-                        self._player_added = False
-                        
-                        while _add_player():
-                            if len(self._players_sequence)==len(sequence):
-                                break
-
-                        del self._player_added
-
-                        self._print_connected_players()
-
-                        # Ready to go?
-                        if len(self._players_sequence) == len(sequence):
-                            # We send the game players to all the players.
-                            Centaur.send_external_request({ "type":GAME_START, "players":self._players_sequence })
-
-                            self._status = GAME_RUNNING
-
-                            self._init_players_cuuid_from_players_sequence()
-
-                            Log.debug(self._players_cuuid)
-                            Log.debug(self._players_sequence)
-
-                            # We can start the game.
-                            self._go()
-
-                            return
-
+                        return
 
                 # Do we wait for a game?
                 if self._status == SLAVE:
@@ -659,6 +630,100 @@ class TeamPlay(Plugin):
                         # We can start the game.
                         self._go()
 
+    def _handle_slave_request(self, player_name:str, request_cuuid:str):
+
+        sequence = self._game_sequence
+
+        Log.debug(f"game sequence={sequence}")
+
+        def _add_player() -> bool:
+
+            index = len(self._players_sequence)
+
+            # If index is even - color is white.
+            current_color = (index % 2) == 0
+
+            player_id = sequence[index]
+
+            if index<len(sequence) and player_id == YOU:
+                # You.
+                self._players_sequence.append({
+                    USERNAME:LICHESS_USERNAME,
+                    PLAYER_ID:YOU,
+                    COLOR:current_color,
+                    "cuuid":CUUID,
+                })
+
+                return True
+            
+            if index<len(sequence) and player_id == CPU:
+                # Computer.
+                self._players_sequence.append({
+                    USERNAME:COMPUTER_NAME,
+                    PLAYER_ID:CPU,
+                    COLOR:current_color,
+                    "cuuid":CUUID,
+                })
+                return True
+            
+            # Player already connected?
+            connected_player = list(filter(lambda p:p[PLAYER_ID] == player_id, self._players_sequence))
+            
+            if len(connected_player):
+                self._players_sequence.append(connected_player[0])
+                return True
+
+            if self._player_added:
+                return False
+
+            # If request_cuuid is None, means that the function
+            # has been invoked only to build the first players of the sequence.
+            if request_cuuid is None:
+                return False
+
+            # Ready to go?
+            if len(self._players_sequence) == len(sequence):
+                return False
+
+            # New player.
+            p = {
+                USERNAME:player_name,
+                PLAYER_ID:player_id,
+                COLOR:current_color,
+                "cuuid":request_cuuid,
+            }
+            self._players_sequence.append(p)
+
+            # We send back the player data.
+            Centaur.send_external_request({ "type":GAME_ACK, PLAYER_DATA:p }, target_cuuid=request_cuuid)
+
+            self._player_added = True
+
+            return True
+
+        self._player_added = False
+        
+        while _add_player():
+            if len(self._players_sequence)==len(sequence):
+                break
+
+        del self._player_added
+
+        self._print_connected_players()
+
+        # Ready to go?
+        if len(self._players_sequence) == len(sequence):
+            # We send the game players to all the players.
+            Centaur.send_external_request({ "type":GAME_START, "players":self._players_sequence })
+
+            self._status = GAME_RUNNING
+
+            self._init_players_cuuid_from_players_sequence()
+
+            # We can start the game.
+            self._go()
+
+            return
 
     # When exists, this function is automatically invoked
     # at start, after splash screen, on PLAY button.
@@ -695,25 +760,43 @@ class TeamPlay(Plugin):
                 Centaur.send_external_request({ "type":GAME_REQUEST, USERNAME:LICHESS_USERNAME })
 
                 return True
-
-            self.YOUR_COLOR = GAME_SEQUENCES[self._game][COLOR]
-
-            # If you are black, we reverse the screen.
-            if self.YOUR_COLOR == chess.BLACK:
-                Centaur.reverse_board()
-
-            self._screen_specific_game_request()
             
-            self._status = MASTER
-            self._player_id = MSTR
-            self._master_cuuid = CUUID
-            self._is_master = True
-
-            Centaur.send_external_request({ "type":SPECIFIC_GAME_REQUEST, USERNAME:LICHESS_USERNAME })
+            # We launch a new game request.
+            self._launch_game_request(GAME_SEQUENCES[self._game]["sequence"])
 
             return True
 
         return False
+
+    def _launch_game_request(self, sequence:List[int]):
+
+        self._game_sequence = sequence
+
+        your_color = chess.WHITE
+
+        # We set your color
+        for n in sequence:
+            if n == YOU:
+                break
+
+            your_color = not your_color
+
+        self.YOUR_COLOR = your_color
+
+        Log.info(f"You are {'WHITE' if your_color else 'BLACK'}.")
+
+        # If you are black, we reverse the screen.
+        if self.YOUR_COLOR == chess.BLACK:
+            Centaur.reverse_board()
+
+        self._screen_specific_game_request()
+        
+        self._status = MASTER
+        self._player_id = YOU
+        self._master_cuuid = CUUID
+        self._is_master = True
+
+        Centaur.send_external_request({ "type":SPECIFIC_GAME_REQUEST, USERNAME:LICHESS_USERNAME })
 
     def _go(self):
 
@@ -727,6 +810,8 @@ class TeamPlay(Plugin):
             chess.WHITE: list(set(p[1][USERNAME] for p in filter(lambda p:p[0] %2 == 0, enumerate(self._players_sequence)))),
             chess.BLACK: list(set(p[1][USERNAME] for p in filter(lambda p:p[0] %2 == 1, enumerate(self._players_sequence)))),
         }
+
+        Log.debug(f"teams={self._teams}")
 
         # Start a new game.
         Centaur.start_game(
@@ -742,10 +827,10 @@ class TeamPlay(Plugin):
     
     def _print_connected_players(self):
 
-        Log.debug(self._players_sequence)
+        Log.debug(f"players_sequence={self._players_sequence}")
 
-        count = len(list(filter(lambda p:p[PLAYER_ID] in (1,2,3), self._players_sequence)))
-        total = len(list(filter(lambda id:id in (1,2,3), GAME_SEQUENCES[self._game]["sequence"])))
+        count = len(list(filter(lambda p:p[PLAYER_ID] not in (YOU, CPU), self._players_sequence)))
+        total = len(list(filter(lambda id:id not in (YOU, CPU), self._game_sequence)))
 
         print("Players", row=11)
         print(f"connected:{count}/{total}")
