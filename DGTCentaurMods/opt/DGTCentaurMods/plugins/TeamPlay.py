@@ -75,7 +75,7 @@ class _MoveAck():
     def __init__(self) -> None:
         self._time = time.time()
         self._tries = 0
-        self._cuuids = []
+        self._cuuids:List[str] = []
 
     def update(self, cuuids:List[str], move_message:dict) -> None:
 
@@ -238,6 +238,7 @@ class TeamPlay(Plugin):
         if data[0] == "@username" and len(data)>1:
             LICHESS_USERNAME = data[1]
             Log.info(f'Username has been updated to "{LICHESS_USERNAME}"')
+            Centaur.configuration().update_lichess_settings("username", LICHESS_USERNAME)
 
         if data[0] == "@start" and len(data)>2:
 
@@ -274,6 +275,19 @@ class TeamPlay(Plugin):
                 )):
                     self._handle_slave_request(None, None)
 
+    def _handle_move_acknowledgement(self):
+        if self._status == PENDING_MOVE_ACK:
+            Log.debug("Pending for move acknowledgement...")
+
+            # Pending for move acknowledgement?
+            # TODO make that part asynchronous.
+            while self._status == PENDING_MOVE_ACK and self._running():
+                if self._expected_ack.is_outdated():
+                    self._expected_ack.retry()
+                time.sleep(.1)
+
+            Log.debug("All players acknowledged the move...")
+
     # When exists, this function is automatically invoked
     # when the game engine state is affected.
     def event_callback(self, event:Enums.Event, outcome:Optional[chess.Outcome]):
@@ -300,6 +314,8 @@ class TeamPlay(Plugin):
                 Centaur.sound(Enums.Sound.GAME_LOST)
                 Centaur.messagebox(("YOU","LOOSE!",None))
 
+            self._handle_move_acknowledgement()
+
         # Player must physically play a move.
         if event == Enums.Event.PLAY:
 
@@ -314,17 +330,7 @@ class TeamPlay(Plugin):
 
             Centaur.messagebox(("Waiting","for other","players..."))
 
-            if self._status == PENDING_MOVE_ACK:
-                Log.debug("Pending for move acknowledgement...")
-
-                # Pending for move acknowledgement?
-                # TODO make that part asynchronous.
-                while self._status == PENDING_MOVE_ACK and self._running():
-                    if self._expected_ack.is_outdated():
-                        self._expected_ack.retry()
-                    time.sleep(.1)
-
-                Log.debug("All players acknowledged the move...")
+            self._handle_move_acknowledgement()
 
             color = 'white' if current_player[COLOR] else 'black'
 
