@@ -633,7 +633,19 @@ class CentaurBoard(common.Singleton):
             Log.exception(CentaurBoard._read_battery, e)
         pass
 
-    def events_board_thread(self, timeout = 60 * 15):
+    def events_board_thread(self):
+
+        DEFAULT_TIMEOUT = 30
+
+        try:
+            timeout = int(CentaurConfig.get_system_settings("idle_time", str(DEFAULT_TIMEOUT)))
+        except:
+            timeout = DEFAULT_TIMEOUT
+            pass
+
+        Log.info(f"board idle_time={timeout}mn.")
+
+        timeout = timeout * 60
 
         self.time_limit = time.time() + timeout
         self._events_timeout = timeout
@@ -675,7 +687,6 @@ class CentaurBoard(common.Singleton):
 
             if self._events_enabled and not self._disabled:
                 self.shutdown()
-
 
 def get():
     return CentaurBoard().initialize()
