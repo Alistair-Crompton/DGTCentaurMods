@@ -112,6 +112,13 @@ Few examples of plugins are available, they show the basic structure of a plugin
 - "Althoff bot" is an adaptative bot that can make blunders and update its level according to the position evaluation.
 - "El Professor" is a bot that corrects your mistakes/blunders while playing.
 
+[![El Professor demo](https://img.youtube.com/vi/PMP4Fp14RFs/0.jpg)](https://www.youtube.com/watch?v=PMP4Fp14RFs)
+
+
+- "Centaur Duel" allows Centaur owners to connect themselves to play together!
+- "Team Play" allows Centaur owners to connect themselves, to create teams and play together in a same game!
+
+If you know Python, create easily your own plugin!
 Here is an example of a "Random bot" that plays random moves:
 
 ```python
