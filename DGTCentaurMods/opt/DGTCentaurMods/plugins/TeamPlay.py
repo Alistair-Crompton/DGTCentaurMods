@@ -67,7 +67,7 @@ LICHESS_USERNAME = Centaur.configuration().get_lichess_settings("username") or "
 COMPUTER_NAME = "Maia"
 
 # Max retries when no move acknowledgement.
-MAX_ACK_RETRIES = 20
+MAX_ACK_RETRIES = 30
 
 # Move acknowledgement class.
 class _MoveAck():
