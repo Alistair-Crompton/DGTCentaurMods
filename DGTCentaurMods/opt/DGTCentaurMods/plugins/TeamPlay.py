@@ -554,7 +554,16 @@ class TeamPlay(Plugin):
 
                 # Did we start a game as master?
                 if self._status == MASTER:
-                    if request_type in (GAME_ACK, GAME_REQUEST):
+
+                    # A player left the game before it starts...
+                    if request_type == GAME_ABORTED:
+
+                        Log.info(f"{PLAYER_NAME} left the game...")
+                        self._players_sequence = list(filter(lambda p:p["cuuid"] != REQUEST_CUUID, self._players_sequence))
+
+                        self._print_connected_players()
+                
+                    elif request_type in (GAME_ACK, GAME_REQUEST):
                         self._handle_slave_request(PLAYER_NAME, REQUEST_CUUID)
 
                         return
