@@ -124,6 +124,21 @@ def on_web_message(message):
 			SOCKET_EX.send_request(message)
 
 		else:
+
+			# Bot message?
+			if consts.BOT_MESSAGE in message:
+
+				Log.info(f"Bot command -> {message[consts.BOT_MESSAGE]}")
+
+				data = message[consts.BOT_MESSAGE]
+
+				if isinstance(data, list):
+
+					if data[0] == "@username" and len(data)>1:
+						LICHESS_USERNAME = data[1]
+						Log.info(f'Username has been updated to "{LICHESS_USERNAME}"')
+						CentaurConfig.update_lichess_settings("username", LICHESS_USERNAME)
+
 			# Internal message
 			# Broadcast to all connected local web clients
 			socketio.emit('web_message', message)

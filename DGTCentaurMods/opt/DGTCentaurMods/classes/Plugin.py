@@ -303,8 +303,6 @@ class Plugin():
 
             if consts.BOT_MESSAGE in data:
 
-                Log.info(f"Bot command -> {data[consts.BOT_MESSAGE]}")
-
                 self.on_bot_request(data[consts.BOT_MESSAGE])
 
             # Plugin needs to be started to 

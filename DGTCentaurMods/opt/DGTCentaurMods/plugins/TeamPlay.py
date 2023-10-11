@@ -237,8 +237,7 @@ class TeamPlay(Plugin):
 
         if data[0] == "@username" and len(data)>1:
             LICHESS_USERNAME = data[1]
-            Log.info(f'Username has been updated to "{LICHESS_USERNAME}"')
-            Centaur.configuration().update_lichess_settings("username", LICHESS_USERNAME)
+            # Config is updated on web server side.
 
         if data[0] == "@start" and len(data)>2:
 
