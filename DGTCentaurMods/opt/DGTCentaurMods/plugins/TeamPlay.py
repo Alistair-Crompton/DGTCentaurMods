@@ -288,19 +288,24 @@ class TeamPlay(Plugin):
             Log.debug("All players acknowledged the move...")
 
     # When exists, this function is automatically invoked
-    # when the game engine state is affected.
-    def event_callback(self, event:Enums.Event, outcome:Optional[chess.Outcome]):
-
-        # If the user chooses to leave,
-        # we quit the plugin.
-        if event == Enums.Event.QUIT:
-            # We send a notification to the opponent.
+    # when before leaving the plugin.
+    def on_stop_callback(self):
+        # We send a notification to the connected players.
+        if self._master_cuuid:
+            Log.debug("Sending notification to other players...")
             Centaur.send_external_request({
                 "type":GAME_ABORTED,
                 MASTER_CUUID:self._master_cuuid,
                 USERNAME:LICHESS_USERNAME,
                 PLAYER_ID:self._player_id })
 
+    # When exists, this function is automatically invoked
+    # when the game engine state is affected.
+    def event_callback(self, event:Enums.Event, outcome:Optional[chess.Outcome]):
+
+        # If the user chooses to leave,
+        # we quit the plugin.
+        if event == Enums.Event.QUIT:
             self.stop()
 
         # End game.
@@ -542,7 +547,7 @@ class TeamPlay(Plugin):
                 # GAME_REQUEST == You don't care about the game and color.
 
                 # Only simple game requests and game acknowledgements are accepted there.
-                if self._status == MASTER and request_type not in (GAME_REQUEST, GAME_ACK, GAME_START):
+                if self._status == MASTER and request_type not in (GAME_REQUEST, GAME_ACK, GAME_START, GAME_ABORTED):
                     return
                 
                 # Only specific game requests and game acknowledgements are accepted there.
@@ -559,7 +564,16 @@ class TeamPlay(Plugin):
                     if request_type == GAME_ABORTED:
 
                         Log.info(f"{PLAYER_NAME} left the game...")
-                        self._players_sequence = list(filter(lambda p:p["cuuid"] != REQUEST_CUUID, self._players_sequence))
+
+                        # We only keep the connected players.
+                        connected_players = list(filter(lambda p:p["cuuid"] not in(REQUEST_CUUID, CUUID), self._players_sequence))
+
+                        self._players_sequence = []
+                        self._handle_slave_request(None, None)
+
+                        # We rebuild the players_sequence.
+                        for player in connected_players:
+                            self._handle_slave_request(player[USERNAME], player["cuuid"])
 
                         self._print_connected_players()
                 

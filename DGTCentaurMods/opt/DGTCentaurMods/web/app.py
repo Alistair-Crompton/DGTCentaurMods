@@ -115,6 +115,34 @@ def on_web_message(message):
 
 		# The chat message comes from inside
 		elif consts.CHAT_MESSAGE in message:
+
+			chat_message:dict = message[consts.CHAT_MESSAGE]
+
+			value:str = chat_message.get("message","#")
+
+			# Internal command - bot message?
+			if value[0] == '@':
+
+				value = " ".join(value.split())
+
+				chat_message["message"] = value
+
+				socketio.emit('web_message', { consts.CHAT_MESSAGE: { "author":chat_message["author"], "cuuid":CUUID, "message":"-> "+value }})
+
+				bot_command = value.split()
+
+				Log.info(f"Bot command -> {value}")
+
+				if bot_command[0] == "@username" and len(bot_command)>1:
+					LICHESS_USERNAME = bot_command[1]
+					Log.info(f'Username has been updated to "{LICHESS_USERNAME}"')
+					CentaurConfig.update_lichess_settings("username", LICHESS_USERNAME)
+
+				socketio.emit('request', { consts.BOT_MESSAGE: bot_command })
+
+				# We do not broadcast bot commands to the external world.
+				return
+
 			# Broadcast to all connected external clients
 			# The message becomes a request to be handled by external clients
 
@@ -124,21 +152,6 @@ def on_web_message(message):
 			SOCKET_EX.send_request(message)
 
 		else:
-
-			# Bot message?
-			if consts.BOT_MESSAGE in message:
-
-				Log.info(f"Bot command -> {message[consts.BOT_MESSAGE]}")
-
-				data = message[consts.BOT_MESSAGE]
-
-				if isinstance(data, list):
-
-					if data[0] == "@username" and len(data)>1:
-						LICHESS_USERNAME = data[1]
-						Log.info(f'Username has been updated to "{LICHESS_USERNAME}"')
-						CentaurConfig.update_lichess_settings("username", LICHESS_USERNAME)
-
 			# Internal message
 			# Broadcast to all connected local web clients
 			socketio.emit('web_message', message)

@@ -476,6 +476,8 @@ class Plugin():
     def stop(self):
         Log.info(f'Stopping plugin "{self._id}"...')
 
+        self.on_stop_callback()
+
         if self._game_engine:
             self._game_engine.stop()
             self._game_engine = None
@@ -510,6 +512,9 @@ class Plugin():
     def move_callback(self, uci_move:str, san_move:str, color:chess.Color, field_index:chess.Square) -> bool:
         return True
     
+    def on_stop_callback(self):
+        return
+
     def on_start_callback(self, key:Enums.Btn) -> bool:
         return True
     
