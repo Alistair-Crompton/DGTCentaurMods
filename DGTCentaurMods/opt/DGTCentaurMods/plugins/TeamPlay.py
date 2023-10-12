@@ -332,7 +332,7 @@ class TeamPlay(Plugin):
                 text=f"{current_player[USERNAME]} {'W' if current_player[COLOR] == chess.WHITE else 'B'}",
                 web_text=f"turn → {current_player[USERNAME]} {'(WHITE)' if current_player[COLOR]  == chess.WHITE else '(BLACK)'}")
 
-            Centaur.messagebox(("Waiting","for other","players..."))
+            self._messagebox_waiting_for_players()
 
             self._handle_move_acknowledgement()
 
@@ -642,9 +642,17 @@ class TeamPlay(Plugin):
 
         sequence = self._game_sequence
 
+        def all_players_connected() -> bool:
+            return len(self._players_sequence) == len(sequence)
+
         Log.debug(f"game sequence={sequence}")
+        Log.debug(f"players_sequence={self._players_sequence}")
 
         def _add_player() -> bool:
+
+            # Ready to go?
+            if all_players_connected():
+                return False
 
             index = len(self._players_sequence)
 
@@ -690,7 +698,7 @@ class TeamPlay(Plugin):
                 return False
 
             # Ready to go?
-            if len(self._players_sequence) == len(sequence):
+            if all_players_connected():
                 return False
 
             # New player.
@@ -712,7 +720,7 @@ class TeamPlay(Plugin):
         self._player_added = False
         
         while _add_player():
-            if len(self._players_sequence)==len(sequence):
+            if all_players_connected():
                 break
 
         del self._player_added
@@ -720,7 +728,7 @@ class TeamPlay(Plugin):
         self._print_connected_players()
 
         # Ready to go?
-        if len(self._players_sequence) == len(sequence):
+        if all_players_connected():
             # We send the game players to all the players.
             Centaur.send_external_request({ "type":GAME_START, "players":self._players_sequence })
 
@@ -760,13 +768,9 @@ class TeamPlay(Plugin):
         if key in (Enums.Btn.TICK, Enums.Btn.PLAY):
 
             if self._game == WAIT_FOR_REQUEST:
-                self._screen_any_game_request()
 
-                self._status = SLAVE
-                self._is_master = False
-
-                Centaur.send_external_request({ "type":GAME_REQUEST, USERNAME:LICHESS_USERNAME })
-
+                self._listen_to_game_request()
+                
                 return True
             
             # We launch a new game request.
@@ -775,6 +779,14 @@ class TeamPlay(Plugin):
             return True
 
         return False
+    
+    def _listen_to_game_request(self):
+        self._screen_any_game_request()
+
+        self._status = SLAVE
+        self._is_master = False
+
+        Centaur.send_external_request({ "type":GAME_REQUEST, USERNAME:LICHESS_USERNAME })
 
     def _launch_game_request(self, sequence:List[int]):
 
@@ -835,13 +847,14 @@ class TeamPlay(Plugin):
     
     def _print_connected_players(self):
 
-        Log.debug(f"players_sequence={self._players_sequence}")
-
         count = len(list(filter(lambda p:p[PLAYER_ID] not in (YOU, CPU), self._players_sequence)))
         total = len(list(filter(lambda id:id not in (YOU, CPU), self._game_sequence)))
 
         print("Players", row=11)
         print(f"connected:{count}/{total}")
+
+    def _messagebox_waiting_for_players(self):
+        Centaur.messagebox(("Waiting","for other","players..."))
 
     def _screen_specific_game_request(self):
         self._screen_header()

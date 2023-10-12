@@ -283,6 +283,7 @@ class Plugin():
             })
 
     def _on_socket_request(self, data, socket):
+
         try:
             # Common sys requests handling
             sys_requests.handle_socket_requests(data)
@@ -310,6 +311,7 @@ class Plugin():
             if self._started:
 
                 if consts.EXTERNAL_REQUEST in data:
+
                     # We only accept requests that come from the same plugin
                     if data[consts.EXTERNAL_REQUEST].get("_plugin", None) == Centaur._plugin.__class__.__name__:
                         self.on_socket_request(data)
@@ -391,6 +393,7 @@ class Plugin():
     def __socket_callback(self, data:dict, _) -> bool:
 
         try:
+
             if len(data.keys())>0:
 
                 if consts.BOT_MESSAGE in data:
@@ -495,7 +498,7 @@ class Plugin():
         self._exit_requested = True
 
     def key_callback(self, key:Enums.Btn):
-        raise NotImplementedError("Your plugin must override key_callback!")
+        return False
     
     def field_callback(self,
                 square:str,
