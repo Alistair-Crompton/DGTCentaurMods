@@ -30,6 +30,8 @@ Inside the DGT Centaur is a Raspberry Pi Zero with an SD Card, by replacing that
 
 - New Lichess module.
 
+[![Lichess demo](https://img.youtube.com/vi/YBm3LUC84ME/0.jpg)](https://www.youtube.com/watch?v=YBm3LUC84ME)
+
 - New chess engines.
 
 - New WIFI module.
