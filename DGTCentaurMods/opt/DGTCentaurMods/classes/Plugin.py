@@ -27,9 +27,10 @@ from DGTCentaurMods.consts import Enums, consts, fonts
 from DGTCentaurMods.lib import common, sys_requests
 from DGTCentaurMods.consts import menu
 
-from typing import Optional, Callable, Tuple, List
+from typing import Optional, Callable, Tuple, List, Dict
 
 from chess.engine import PovScore, Limit
+
 import chess
 
 TAnalyseResult = ChessEngine.TAnalyseResult
@@ -44,6 +45,7 @@ class Centaur():
     _current_row:int = 1
     _plugin:Plugin = None
     _chess_engine:Optional[ChessEngine.ChessEngineWrapper] = None
+    _chess_engines:Dict[str, ChessEngine.ChessEngineWrapper] = {}
 
     @staticmethod
     def _attach_plugin(plugin):
@@ -71,6 +73,11 @@ class Centaur():
         message = { consts.EXTERNAL_REQUEST: request, "_target": target_cuuid }
 
         SOCKET.send_web_message(message)
+
+    @staticmethod
+    def send_bot_response(message:str):
+
+        SOCKET.send_web_message({ consts.BOT_MESSAGE: message })
 
     @staticmethod
     def push_button(button:Enums.Btn):
@@ -192,23 +199,67 @@ class Centaur():
             Centaur._plugin._started = False
 
     @staticmethod
-    def set_chess_engine(engine_name):
+    def set_main_chess_engine(engine_name):
         Centaur._chess_engine = ChessEngine.get(f"{consts.ENGINES_DIRECTORY}/{engine_name}")
     
     @staticmethod
-    def configure_chess_engine(options:dict):
+    def configure_main_chess_engine(options:dict):
         if Centaur._chess_engine:
             Centaur._chess_engine.configure(options)
 
     @staticmethod
-    def request_chess_engine_move(engine_callback:Callable[[], ChessEngine.TPlayResult], time:int=5):
-        if Centaur._chess_engine and Centaur._plugin:
+    def get_chess_engines() -> List[Dict[str, str]]:
+        return ChessEngine.get_chess_engines()
+        
+    @staticmethod
+    def add_chess_engine(engine_name:str):
 
-            Centaur._chess_engine.play(
-                Centaur._plugin.game_engine.chessboard,
-                limit=Limit(time=time),
+        id = engine_name.upper()
 
-                on_move_done = engine_callback)
+        if not id in Centaur._chess_engines:
+            
+            engine = ChessEngine.get(f"{consts.ENGINES_DIRECTORY}/{engine_name}")
+            
+            Centaur._chess_engines[id] = engine
+
+            return engine
+        else:
+            return Centaur._chess_engines[id]
+        
+    @staticmethod
+    def configure_chess_engine(engine_name:str, option_id:str):
+
+        id = engine_name.upper()
+
+        if not id in Centaur._chess_engines:
+            raise Exception(f"Engine [{engine_name}] is not initialized.")
+
+        Centaur._chess_engines[id].set_configuration(option_id)
+
+    @staticmethod
+    def request_chess_engine_move(engine_callback:Callable[[], ChessEngine.TPlayResult], time:int=5, engine_name:Optional[str]=None):
+        
+        if Centaur._plugin:
+
+            if engine_name:
+
+                if engine_name in Centaur._chess_engines:
+
+                    Centaur._chess_engines[engine_name].play(
+                        Centaur._plugin.game_engine.chessboard,
+                        limit=Limit(time=time),
+
+                        on_move_done = engine_callback)
+                else:
+                    raise Exception(f"Engine [{engine_name}] requested but not loaded!")
+        
+            elif Centaur._chess_engine:
+
+                Centaur._chess_engine.play(
+                    Centaur._plugin.game_engine.chessboard,
+                    limit=Limit(time=time),
+
+                    on_move_done = engine_callback)
                 
     @staticmethod
     def request_chess_engine_evaluation(engine_callback:Callable[[PovScore, List[chess.Move]]], time:int=2, multipv:int=1):
@@ -484,6 +535,12 @@ class Plugin():
         if self._game_engine:
             self._game_engine.stop()
             self._game_engine = None
+
+        if len(Centaur._chess_engines.keys()):
+            for id in Centaur._chess_engines.keys():
+                Centaur._chess_engines[id].quit()
+
+        Centaur._chess_engines = {}
 
         if Centaur._chess_engine:
             Centaur._chess_engine.quit()

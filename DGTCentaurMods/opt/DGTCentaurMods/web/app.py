@@ -106,12 +106,19 @@ def on_disconnect():
 @socketio.on('web_message')
 def on_web_message(message):
 
+	def bot_response(message:str):
+		socketio.emit('web_message', { consts.CHAT_MESSAGE: { "author":"Centaur", "cuuid":CUUID, "message":"-> "+message }})
+
 	try:
 		if consts.EXTERNAL_REQUEST in message:
 			message[consts.EXTERNAL_REQUEST]["cuuid"] = CUUID
 			message[consts.EXTERNAL_REQUEST]["tag"] = consts.TAG_RELEASE
 
 			SOCKET_EX.send_request(message)
+
+		# The bot message comes from inside
+		elif consts.BOT_MESSAGE in message:
+			bot_response(message[consts.BOT_MESSAGE])
 
 		# The chat message comes from inside
 		elif consts.CHAT_MESSAGE in message:
@@ -135,8 +142,10 @@ def on_web_message(message):
 
 				if bot_command[0] == "@username" and len(bot_command)>1:
 					LICHESS_USERNAME = bot_command[1]
-					Log.info(f'Username has been updated to "{LICHESS_USERNAME}"')
+					response = f'Username has been updated to "{LICHESS_USERNAME}"'
+					Log.info(response)
 					CentaurConfig.update_lichess_settings("username", LICHESS_USERNAME)
+					bot_response(response)
 
 				socketio.emit('request', { consts.BOT_MESSAGE: bot_command })
 

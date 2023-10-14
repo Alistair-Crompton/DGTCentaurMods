@@ -28,8 +28,20 @@ from chess.engine import PovScore
 
 from typing import List, Tuple, Callable, Optional, Dict, Union
 
-import time, threading, queue, os, chess, chess.engine, asyncio
+import time, threading, queue, os, chess, chess.engine, configparser
 
+
+def get_chess_engines() -> List[Dict[str, str]]:
+    # TODO: refactor with menu.py
+
+    def get_sections(uci_file):
+        parser = configparser.ConfigParser()
+        parser.read(uci_file)
+
+        return list(map(lambda section:section, parser.sections()))
+                    
+    return list(map(lambda f:{"id":Path(f.name).stem, "options":get_sections(f.path)}, 
+                        filter(lambda f: f.name.endswith(".uci"), os.scandir(consts.ENGINES_DIRECTORY))))
 
 class TAnalyseResult():
 
@@ -57,6 +69,8 @@ class ChessEngineWrapper():
 
     __engine = None
     __engine_options = None
+    __current_engine_options = None
+    __reconfigure = True
 
     __cache = []
 
@@ -73,6 +87,10 @@ class ChessEngineWrapper():
         assert engine_path != None, "Need an engine_path!"
 
         self.__engine_path = engine_path
+
+        if not os.path.exists(engine_path):
+            Log.exception(f'"{engine_path}" does not exist!')
+            return
 
         # Async mode
         if async_mode:
@@ -188,10 +206,15 @@ class ChessEngineWrapper():
                 
                 Log.debug(f'{ChessEngineWrapper.__instanciate_engine.__name__}({id(self.__engine)})')
 
-                if self.__engine_options != None:
+            if self.__reconfigure and self.__current_engine_options != self.__engine_options and self.__engine_options != None:
 
-                    Log.debug(self.__engine_options)
-                    self.__engine.configure(self.__engine_options)
+                Log.debug(f'Configuring [{id(self.__engine)}] with {self.__engine_options}.')
+
+                self.__engine.configure(self.__engine_options)
+
+                self.__current_engine_options = self.__engine_options
+
+            self.__reconfigure = False
 
         except Exception as e:
             Log.exception(ChessEngineWrapper.__instanciate_engine, e)
@@ -224,6 +247,21 @@ class ChessEngineWrapper():
 
             time.sleep(.5)
 
+    def set_configuration(self, option_id:str) -> bool:
+
+        uci_file = self.__engine_path+".uci"
+        
+        config = configparser.ConfigParser()
+        config.optionxform = str
+        config.read(uci_file)
+
+        uci_options:dict={}
+
+        for item in config.items(option_id):
+            uci_options[item[0]] = item[1]
+
+        self.configure(uci_options)
+
     def configure(self, engine_options = {}) -> None:
 
         # Only for RodentIV...
@@ -238,6 +276,8 @@ class ChessEngineWrapper():
             del engine_options["PersonalityFile"]
 
         self.__engine_options = engine_options
+
+        self.__reconfigure = True
     
     def analyse(self, board, limit, multipv=1, on_analyse_done:Optional[Callable[[Tuple[TAnalyseResult, ...]], None]] = None) -> Optional[Tuple[TAnalyseResult, ...]]:
         def _analyse(board, limit, multipv) -> Tuple[TAnalyseResult, ...]:

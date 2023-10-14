@@ -44,7 +44,7 @@ class AlthoffBot(Plugin):
     def start(self):
         super().start()
 
-        Centaur.set_chess_engine("ct800")
+        Centaur.set_main_chess_engine("ct800")
 
         self._adjust_chess_engine(1800)
 
@@ -232,7 +232,7 @@ class AlthoffBot(Plugin):
             return
 
         if self._elo != elo:
-            Centaur.configure_chess_engine({"UCI_Elo": elo})
+            Centaur.configure_main_chess_engine({"UCI_Elo": elo})
             Log.debug(f"Chess engine ELO adjusted from {self._elo} to {elo}.")
             self._elo = elo
         else:

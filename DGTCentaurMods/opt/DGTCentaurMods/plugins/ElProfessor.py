@@ -266,8 +266,8 @@ class ElProfessor(Plugin):
             # User must choose a color.
             return False
         
-        Centaur.set_chess_engine("stockfish")
-        Centaur.configure_chess_engine({"UCI_Elo": 2200})
+        Centaur.set_main_chess_engine("stockfish")
+        Centaur.configure_main_chess_engine({"UCI_Elo": 2200})
 
         # Start a new game.
         Centaur.start_game(

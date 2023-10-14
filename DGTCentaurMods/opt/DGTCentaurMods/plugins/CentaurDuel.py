@@ -20,7 +20,7 @@
 # distribution, modification, variant, or derivative of this software.
 
 from DGTCentaurMods.classes.Plugin import Centaur
-from DGTCentaurMods.plugins.TeamPlay import TeamPlay, YOU, P1, GAME_REQUEST, USERNAME, LICHESS_USERNAME, button, print
+from DGTCentaurMods.plugins.TeamPlay import TeamPlay, YOU, P1, GAME_REQUEST, FLD_USERNAME, LICHESS_USERNAME, button, print
 from DGTCentaurMods.consts import Enums, fonts
 
 # Main plugin
