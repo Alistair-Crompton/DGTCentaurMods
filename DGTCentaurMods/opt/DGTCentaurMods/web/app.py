@@ -19,7 +19,7 @@
 # This and any other notices must remain intact and unaltered in any
 # distribution, modification, variant, or derivative of this software.
 
-from flask import Flask, render_template
+from flask import Flask, render_template, send_from_directory
 from flask_socketio import SocketIO
 
 from DGTCentaurMods.lib import common
@@ -81,7 +81,7 @@ def on_external_socket_request(message:dict, socket):
 			# We reject anonymous messages
 			if not "cuuid" in request:
 				return
-			
+
 			# If we are the source, we reject the request
 			if request["cuuid"] == CUUID:
 				return
@@ -202,11 +202,11 @@ def on_request(message):
 
 			response["script_output"] = result.decode()
 			socketio.emit('web_message', response)
-		
+
 		except Exception as e:
 			response["script_output"] = str(e)
 			socketio.emit('web_message', response)
-			
+
 			pass
 
 	# System request
@@ -323,7 +323,7 @@ def on_request(message):
 					"editable_name":file_descriptor["editable_name"],
 					"can_delete":file_descriptor["can_delete"],
 				}
-				
+
 				socketio.emit('web_message', response)
 			return
 
@@ -346,7 +346,7 @@ def on_request(message):
 					socketio.emit('web_message', response)
 
 					return
-				
+
 				if action["new_file"] == "__delete__" and file_descriptor["can_delete"]:
 
 					os.system(f'sudo rm -f "{path}"')
@@ -368,7 +368,7 @@ def on_request(message):
 				response["popup"] = "The " + file_descriptor["label"] + " has been successfuly updated!"
 				socketio.emit('web_message', response)
 			return
-		
+
 		if "data" in message:
 			action = message["data"]
 
@@ -384,7 +384,7 @@ def on_request(message):
 					CentaurConfig.update_sound_settings(message["value"]["id"], message["value"]["value"])
 
 			if action == "sounds_settings":
-				
+
 				# We read the sounds settings
 				for s in consts.SOUNDS_SETTINGS:
 					s["value"] = CentaurConfig.get_sound_settings(s["id"])
@@ -413,6 +413,16 @@ def on_request(message):
 			# Broadcast to all connected clients
 			socketio.emit('request', message)
 
-@appFlask.route("/")
-def index():
-	return render_template('2.0/index.html', data={"title":consts.WEB_NAME, "boardsize": 550, "iconsize": int(550/9)})
+
+if CentaurConfig.get_system_settings("vue_ui", "0") == "1":
+    @appFlask.route("/")
+    def vue_index():
+        return send_from_directory("client/dist", "index.html")
+
+    @appFlask.route("/<path:path>")
+    def vue_dist(path):
+        return send_from_directory("client/dist", path)
+else:
+    @appFlask.route("/")
+    def index():
+        return render_template('2.0/index.html', data={"title":consts.WEB_NAME, "boardsize": 550, "iconsize": int(550/9)})
