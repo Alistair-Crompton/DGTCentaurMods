@@ -2,7 +2,7 @@
 .PHONY: all clean distclean
 
 all:
-	npm install
+	npm ci
 	npm run build
 
 clean: distclean
