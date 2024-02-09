@@ -21,7 +21,7 @@ stage:
 	cp $(basename)/GNUmakefile $(stage)
 	sed -e 's/\$$Version\$$/$(version)/' \
 		$(basename)/DEBIAN/control > $(stage)/DEBIAN/control
-	sed -e 's/TAG_RELEASE.*/TAG_RELEASE = "ON$(version)"/' \
+	sed -e 's/TAG_RELEASE =.*/TAG_RELEASE = "ON$(version)"/' \
 		$(basename)/opt/DGTCentaurMods/consts/consts.py > \
 		$(stage)/opt/DGTCentaurMods/consts/consts.py
 
