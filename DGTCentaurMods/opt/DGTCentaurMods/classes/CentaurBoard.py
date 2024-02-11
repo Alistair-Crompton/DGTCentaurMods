@@ -99,17 +99,18 @@ class CentaurBoard(common.Singleton):
             # We send an initial 0x4d to ask the board to provide its address
             print('Detecting board address...')
 
-            self.read_from_serial()
+            # This is unnecessary.
+            # self.read_from_serial()
 
-            print('Sending payload 1...')
-            self.write_to_serial(b'\x4d')
-            self.read_from_serial()
+            # print('Sending payload 1...')
+            # self.write_to_serial(b'\x4d')
+            # self.read_from_serial()
 
-            print('Sending payload 2...')
-            self.write_to_serial(b'\x4e')
-            self.read_from_serial()
+            # print('Sending payload 2...')
+            # self.write_to_serial(b'\x4e')
+            # self.read_from_serial()
 
-            print('Serial is open. Waiting for response...')
+            # print('Serial is open. Waiting for response...')
 
             response = b''
 
@@ -239,30 +240,31 @@ class CentaurBoard(common.Singleton):
         self.send_packet(b'\x83', b'')
         self.read_from_serial()
 
-    # TODO to be reviewed
     def clear_serial(self, timeout=30):
 
         if self._disabled:
             return True
 
-        response_1 = b''
-        response_2 = b''
-        
+        # response_1 = b''
+        response_2 = b""
+
         timeout = time.time() + timeout
 
         while True:
             print('Checking and clear the serial...')
             while time.time() < timeout:
 
-                expected_1 = self.build_packet(b'\x85\x00\x06', b'')
-                response_1 = self.ask_serial(b'\x83', b'')
+                # This request and response is actually "_read_fields".
+                # expected_1 = self.build_packet(b'\x85\x00\x06', b'')
+                # response_1 = self.ask_serial(b'\x83', b'')
 
                 expected_2 = self.build_packet(b'\xb1\x00\x06', b'')
                 response_2 = self.ask_serial(b'\x94', b'')
 
                 # If board is idle, return True
-                if expected_1 == response_1 and expected_2 == response_2:
-                    print('Board is idle. Serial is clear.')
+                # if expected_1 == response_1 and expected_2 == response_2:
+                if expected_2 == response_2:
+                    print("Board is idle. Serial is clear.")
                     return True
                 
                 time.sleep(1)
