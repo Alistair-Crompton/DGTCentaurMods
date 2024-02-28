@@ -30,3 +30,4 @@ DGTCentaurMods/web/static/epaper.jpg
 **/.toggled
 DGTCentaurMods.code-workspace
 .gitignore
+DGTCentaurMods/opt/DGTCentaurMods/web/client/vite.config.ts
