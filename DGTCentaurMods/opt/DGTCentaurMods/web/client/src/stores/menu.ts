@@ -70,8 +70,18 @@ export const useMenuStore = defineStore('menu', () => {
   // ---------------------------------------------------------------------------
   // BEGIN Exported to JS
 
+  class HistoryProxy {
+    pgn() {
+      return history.pgn
+    }
+  }
+
   // Provides "me.board" interface expected by JS menu items
   class BoardProxy {
+    get history() {
+      return new HistoryProxy()
+    }
+
     get plugin() {
       return board.plugin
     }
