@@ -24,30 +24,25 @@ distribution, modification, variant, or derivative of this software.
 <template>
   <div class="drawer">
     <!-- Hidden checkbox toggles display of side drawer -->
-    <input
-      class="drawer-toggle"
-      id="showDrawer"
-      type="checkbox"
-      v-model="display.showDrawer"
-    />
+    <input class="drawer-toggle" id="showDrawer" type="checkbox" v-model="display.showDrawer" />
 
     <!-- Main content -->
     <div class="drawer-content" style="height: 100vh;">
-      <Editor v-if="display.showEditor"/>
+      <Editor v-if="display.showEditor" />
       <div v-else class="flex flex-col" style="height: 100%;">
-        <Navbar/>
-        <Content/>
+        <Navbar />
+        <Content />
         <div class="flex-1"></div>
-        <hr/>
-        <LogEvents/>
+        <hr />
+        <LogEvents />
       </div>
-      <Dialogs/>
+      <Dialogs />
     </div>
 
     <!-- Sidebar displays menu of previous games -->
-    <div class="drawer-side">
+    <div class="drawer-side z-10">
       <label for="showDrawer" class="drawer-overlay"></label>
-      <PreviousGames/>
+      <PreviousGames />
     </div>
     <Toasts />
   </div>
