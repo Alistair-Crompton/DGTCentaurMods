@@ -1,113 +1,111 @@
-# Plugin Development Guide for DGT Centaur Mods
+# Guía de Desarrollo de Plugins para DGT Centaur Mods
 
-[🇪🇸 Versión en Español](README.es.md)
-
-## Table of Contents
-1. [Introduction](#introduction)
-2. [Basic Structure](#basic-structure)
-3. [Available Callbacks](#available-callbacks)
-4. [Centaur API](#centaur-api)
-5. [Complete Examples](#complete-examples)
-6. [Best Practices](#best-practices)
+## Índice
+1. [Introducción](#introducción)
+2. [Estructura Básica](#estructura-básica)
+3. [Callbacks Disponibles](#callbacks-disponibles)
+4. [API de Centaur](#api-de-centaur)
+5. [Ejemplos Completos](#ejemplos-completos)
+6. [Mejores Prácticas](#mejores-prácticas)
 
 ---
 
-## Introduction
+## Introducción
 
-Plugins for DGT Centaur Mods allow you to extend the functionality of the DGT Centaur chess board. Each plugin inherits from the `Plugin` base class and can implement chess variants, educational games, custom bots, and more.
+Los plugins para DGT Centaur Mods permiten extender la funcionalidad del tablero de ajedrez DGT Centaur. Cada plugin hereda de la clase base `Plugin` y puede implementar variantes de ajedrez, juegos educativos, bots personalizados, y más.
 
-### Prerequisites
-- Basic Python knowledge
-- Familiarity with the `python-chess` library
-- Understanding of the DGT Centaur system
+### Requisitos Previos
+- Conocimientos básicos de Python
+- Familiaridad con la librería `python-chess`
+- Comprensión del sistema DGT Centaur
 
 ---
 
-## Basic Structure
+## Estructura Básica
 
-### 1. File Structure
+### 1. Estructura de Archivos
 
-All plugins must be located in the directory:
+Todos los plugins deben ubicarse en el directorio:
 ```
 DGTCentaurMods/opt/DGTCentaurMods/plugins/
 ```
 
-**Important rule**: The file name must exactly match the class name.
-- File: `MyPlugin.py`
-- Class: `class MyPlugin(Plugin):`
+**Regla importante**: El nombre del archivo debe coincidir exactamente con el nombre de la clase.
+- Archivo: `MiPlugin.py`
+- Clase: `class MiPlugin(Plugin):`
 
-### 2. Basic Template
+### 2. Plantilla Básica
 
 ```python
 # This file is part of the DGTCentaur Mods open source software
 # ( https://github.com/Alistair-Crompton/DGTCentaurMods )
-# [Include full GPL v3 license header]
+# [Licencia GPL v3 - incluir el header completo]
 
 import chess
 from DGTCentaurMods.classes.Plugin import Plugin, Centaur
 from DGTCentaurMods.consts import Enums, fonts
 from typing import Optional
 
-class MyPlugin(Plugin):
+class MiPlugin(Plugin):
     """
-    Description of what your plugin does.
+    Descripción de lo que hace tu plugin.
     """
 
     def __init__(self, id: str):
-        """Plugin constructor."""
+        """Constructor del plugin."""
         super().__init__(id)
-        # Initialize plugin variables here
-        self.my_variable = None
+        # Inicializar variables del plugin aquí
+        self.mi_variable = None
 
     def start(self):
         """
-        Automatically invoked when the user launches the plugin.
+        Invocado automáticamente cuando el usuario lanza el plugin.
         """
         super().start()
-        # Initial setup here
+        # Configuración inicial aquí
 
     def stop(self):
         """
-        Automatically invoked when the user stops the plugin.
+        Invocado automáticamente cuando el usuario detiene el plugin.
         """
         super().stop()
-        # Resource cleanup here
+        # Limpieza de recursos aquí
 
     def splash_screen(self) -> bool:
         """
-        Initial screen shown when starting the plugin.
-        Returns True if you want to activate the splash screen.
+        Pantalla inicial mostrada al iniciar el plugin.
+        Retorna True si quieres activar la splash screen.
         """
         Centaur.clear_screen()
-        Centaur.print("MY PLUGIN", font=fonts.DIGITAL_FONT, row=2)
+        Centaur.print("MI PLUGIN", font=fonts.DIGITAL_FONT, row=2)
         Centaur.print("Push PLAY", row=5)
         Centaur.print("to start!")
         return True
 
     def on_start_callback(self, key: Enums.Btn) -> bool:
         """
-        Invoked after splash screen when a button is pressed.
-        Returns True to indicate the game has started.
+        Invocado después de la splash screen cuando se presiona un botón.
+        Retorna True para indicar que el juego ha comenzado.
         """
         if key == Enums.Btn.PLAY:
-            # Start the game
+            # Iniciar el juego
             return True
         return False
 ```
 
 ---
 
-## Available Callbacks
+## Callbacks Disponibles
 
 ### 1. `splash_screen() -> bool`
 
-Shows an initial screen when the plugin is launched.
+Muestra una pantalla inicial cuando se lanza el plugin.
 
-**Return:**
-- `True`: Activates splash screen (user must press a button to continue)
-- `False`: Skips directly to the game
+**Retorno:**
+- `True`: Activa la splash screen (el usuario debe presionar un botón para continuar)
+- `False`: Salta directo al juego
 
-**Example:**
+**Ejemplo:**
 ```python
 def splash_screen(self) -> bool:
     Centaur.clear_screen()
@@ -120,16 +118,16 @@ def splash_screen(self) -> bool:
 
 ### 2. `on_start_callback(key: Enums.Btn) -> bool`
 
-Invoked when the user presses a button after the splash screen.
+Invocado cuando el usuario presiona un botón después de la splash screen.
 
-**Parameters:**
-- `key`: The button pressed (Enums.Btn.PLAY, UP, DOWN, TICK, etc.)
+**Parámetros:**
+- `key`: El botón presionado (Enums.Btn.PLAY, UP, DOWN, TICK, etc.)
 
-**Return:**
-- `True`: The game has started
-- `False`: Wait for more user actions
+**Retorno:**
+- `True`: El juego ha comenzado
+- `False`: Esperar más acciones del usuario
 
-**Example:**
+**Ejemplo:**
 ```python
 def on_start_callback(self, key: Enums.Btn) -> bool:
     if key == Enums.Btn.UP:
@@ -138,9 +136,9 @@ def on_start_callback(self, key: Enums.Btn) -> bool:
         self.HUMAN_COLOR = chess.BLACK
         Centaur.reverse_board()
     else:
-        return False  # Wait for color choice
+        return False  # Esperar elección de color
 
-    # Start game
+    # Iniciar partida
     Centaur.start_game(
         white="You",
         black="Bot",
@@ -154,29 +152,29 @@ def on_start_callback(self, key: Enums.Btn) -> bool:
 
 ### 3. `key_callback(key: Enums.Btn) -> bool`
 
-Invoked each time the user presses a button (except BACK, which is handled automatically).
+Invocado cada vez que el usuario presiona un botón (excepto BACK, que se maneja automáticamente).
 
-**Parameters:**
-- `key`: The button pressed
+**Parámetros:**
+- `key`: El botón presionado
 
-**Return:**
-- `True`: The key has been handled by the plugin
-- `False`: The key can be handled by the game engine
+**Retorno:**
+- `True`: La tecla ha sido manejada por el plugin
+- `False`: La tecla puede ser manejada por el motor del juego
 
-**Available buttons:**
+**Botones disponibles:**
 ```python
-Enums.Btn.HELP    # Help button
-Enums.Btn.TICK    # Tick/confirmation button
-Enums.Btn.UP      # Up button
-Enums.Btn.DOWN    # Down button
-Enums.Btn.PLAY    # Play button
+Enums.Btn.HELP    # Botón de ayuda
+Enums.Btn.TICK    # Botón de tick/confirmación
+Enums.Btn.UP      # Botón arriba
+Enums.Btn.DOWN    # Botón abajo
+Enums.Btn.PLAY    # Botón play
 ```
 
-**Example:**
+**Ejemplo:**
 ```python
 def key_callback(self, key: Enums.Btn):
     if key == Enums.Btn.HELP:
-        Centaur.hint()  # Show hint using Stockfish
+        Centaur.hint()  # Mostrar pista usando Stockfish
         return True
     return False
 ```
@@ -185,20 +183,20 @@ def key_callback(self, key: Enums.Btn):
 
 ### 4. `event_callback(event: Enums.Event, outcome: Optional[chess.Outcome])`
 
-Invoked when the game engine state changes.
+Invocado cuando el estado del motor del juego cambia.
 
-**Available events:**
+**Eventos disponibles:**
 ```python
-Enums.Event.NEW_GAME      # New game started
-Enums.Event.RESUME_GAME   # Game resumed
-Enums.Event.PLAY          # Play turn
-Enums.Event.REQUEST_DRAW  # Draw request
-Enums.Event.RESIGN_GAME   # Resignation
-Enums.Event.QUIT          # Exit plugin
-Enums.Event.TERMINATION   # Game ended
+Enums.Event.NEW_GAME      # Nueva partida iniciada
+Enums.Event.RESUME_GAME   # Partida reanudada
+Enums.Event.PLAY          # Turno de juego
+Enums.Event.REQUEST_DRAW  # Solicitud de tablas
+Enums.Event.RESIGN_GAME   # Rendición
+Enums.Event.QUIT          # Salir del plugin
+Enums.Event.TERMINATION   # Final de la partida
 ```
 
-**Example:**
+**Ejemplo:**
 ```python
 def event_callback(self, event: Enums.Event, outcome: Optional[chess.Outcome]):
     if event == Enums.Event.QUIT:
@@ -216,7 +214,7 @@ def event_callback(self, event: Enums.Event, outcome: Optional[chess.Outcome]):
         Centaur.header(f"{current_player} {'W' if turn == chess.WHITE else 'B'}")
 
         if turn == (not self.HUMAN_COLOR):
-            # Computer's turn
+            # Turno de la computadora
             self.computer_move()
 ```
 
@@ -224,38 +222,38 @@ def event_callback(self, event: Enums.Event, outcome: Optional[chess.Outcome]):
 
 ### 5. `move_callback(uci_move: str, san_move: str, color: chess.Color, field_index: chess.Square) -> bool`
 
-Invoked when the player physically moves a piece.
+Invocado cuando el jugador mueve físicamente una pieza.
 
-**Parameters:**
-- `uci_move`: Move in UCI notation (e.g., "e2e4")
-- `san_move`: Move in SAN notation (e.g., "e4")
-- `color`: Color that moved (chess.WHITE or chess.BLACK)
-- `field_index`: Destination square index (0-63)
+**Parámetros:**
+- `uci_move`: Movimiento en notación UCI (ej: "e2e4")
+- `san_move`: Movimiento en notación SAN (ej: "e4")
+- `color`: Color que movió (chess.WHITE o chess.BLACK)
+- `field_index`: Índice del cuadro destino (0-63)
 
-**Return:**
-- `True`: Move accepted
-- `False`: Move rejected
+**Retorno:**
+- `True`: Movimiento aceptado
+- `False`: Movimiento rechazado
 
-**Example:**
+**Ejemplo:**
 ```python
 def move_callback(self, uci_move: str, san_move: str, color: chess.Color, field_index: chess.Square):
-    # Validate custom move
+    # Validar movimiento personalizado
     if color == self.HUMAN_COLOR:
-        # Evaluate position after move
+        # Evaluar posición después del movimiento
         self.evaluate_position()
-    return True  # Accept move
+    return True  # Aceptar movimiento
 ```
 
 ---
 
 ### 6. `undo_callback(uci_move: str, san_move: str, field_index: chess.Square)`
 
-Invoked when the player takes back a move.
+Invocado cuando el jugador retrocede un movimiento.
 
-**Example:**
+**Ejemplo:**
 ```python
 def undo_callback(self, uci_move: str, san_move: str, field_index: chess.Square):
-    # Re-evaluate the position
+    # Re-evaluar la posición
     self.evaluate_position()
 ```
 
@@ -263,24 +261,24 @@ def undo_callback(self, uci_move: str, san_move: str, field_index: chess.Square)
 
 ### 7. `field_callback(square: str, field_action: Enums.PieceAction, web_move: bool)`
 
-Invoked when the player interacts with a board square.
+Invocado cuando el jugador interactúa con una casilla del tablero.
 
-**Parameters:**
-- `square`: Square name (e.g., "e4")
-- `field_action`: Action performed (LIFT or PLACE)
-- `web_move`: If the move comes from the web interface
+**Parámetros:**
+- `square`: Nombre del cuadro (ej: "e4")
+- `field_action`: Acción realizada (LIFT o PLACE)
+- `web_move`: Si el movimiento viene de la interfaz web
 
-**Available actions:**
+**Acciones disponibles:**
 ```python
-Enums.PieceAction.LIFT   # Piece lifted
-Enums.PieceAction.PLACE  # Piece placed
+Enums.PieceAction.LIFT   # Pieza levantada
+Enums.PieceAction.PLACE  # Pieza colocada
 ```
 
-**Example:**
+**Ejemplo:**
 ```python
 def field_callback(self, square: str, field_action: Enums.PieceAction, web_move: bool):
     if field_action == Enums.PieceAction.PLACE:
-        # Check if it's the correct square
+        # Verificar si es el cuadro correcto
         if square == self.target_square:
             Centaur.sound(Enums.Sound.CORRECT_MOVE)
         else:
@@ -289,45 +287,45 @@ def field_callback(self, square: str, field_action: Enums.PieceAction, web_move:
 
 ---
 
-## Centaur API
+## API de Centaur
 
-The `Centaur` class provides a static API to interact with the hardware and system.
+La clase `Centaur` proporciona una API estática para interactuar con el hardware y el sistema.
 
-### Display (E-paper Screen)
+### Display (Pantalla)
 
 #### `Centaur.clear_screen()`
-Clears the e-paper display.
+Limpia la pantalla e-paper.
 
 ```python
 Centaur.clear_screen()
 ```
 
 #### `Centaur.print(text: str, row: float = -1, font=fonts.MAIN_FONT)`
-Prints text on the screen.
+Imprime texto en la pantalla.
 
-**Parameters:**
-- `text`: Text to display
-- `row`: Row where to display (optional, auto-increments)
-- `font`: Font to use
+**Parámetros:**
+- `text`: Texto a mostrar
+- `row`: Fila donde mostrar (opcional, auto-incrementa)
+- `font`: Fuente a usar
 
-**Available fonts:**
+**Fuentes disponibles:**
 ```python
-fonts.MAIN_FONT          # Main font
-fonts.DIGITAL_FONT       # Large digital font
-fonts.SMALL_DIGITAL_FONT # Small digital font
-fonts.MEDIUM_MAIN_FONT   # Medium font
-fonts.SMALL_MAIN_FONT    # Small font
+fonts.MAIN_FONT          # Fuente principal
+fonts.DIGITAL_FONT       # Fuente digital grande
+fonts.SMALL_DIGITAL_FONT # Fuente digital pequeña
+fonts.MEDIUM_MAIN_FONT   # Fuente mediana
+fonts.SMALL_MAIN_FONT    # Fuente pequeña
 ```
 
-**Example:**
+**Ejemplo:**
 ```python
-Centaur.print("MY PLUGIN", font=fonts.DIGITAL_FONT, row=2)
-Centaur.print("Line 1")
-Centaur.print("Line 2")  # Row auto-increments
+Centaur.print("MI PLUGIN", font=fonts.DIGITAL_FONT, row=2)
+Centaur.print("Línea 1")
+Centaur.print("Línea 2")  # Se auto-incrementa la fila
 ```
 
 #### `Centaur.header(text: str, web_text: str = None)`
-Shows a header during the game.
+Muestra un encabezado en la partida.
 
 ```python
 Centaur.header("You W")
@@ -338,14 +336,14 @@ Centaur.header(
 ```
 
 #### `Centaur.messagebox(text_lines: Tuple[str,...], row: float = 8, tick_button: bool = False)`
-Shows a message box.
+Muestra un cuadro de mensaje.
 
 ```python
 Centaur.messagebox(("Game Over!", "White wins"), row=8)
 ```
 
 #### `Centaur.print_button_label(button: Enums.Btn, x: int, row: float = -1, text: str = "")`
-Shows a button label.
+Muestra una etiqueta de botón.
 
 ```python
 Centaur.print_button_label(Enums.Btn.UP, row=8, x=6, text="Play white")
@@ -354,31 +352,31 @@ Centaur.print_button_label(Enums.Btn.DOWN, row=9, x=6, text="Play black")
 
 ---
 
-### Board LEDs
+### LEDs del Tablero
 
 #### `Centaur.flash(square: str)`
-Flashes an LED on a square.
+Destella un LED en una casilla.
 
 ```python
 Centaur.flash("e4")
 ```
 
 #### `Centaur.light_move(uci_move: str, web: bool = True)`
-Lights up a move (from → to).
+Ilumina un movimiento (origen → destino).
 
 ```python
 Centaur.light_move("e2e4")
 ```
 
 #### `Centaur.light_moves(uci_moves: Tuple[str], web: bool = True)`
-Lights up multiple moves.
+Ilumina múltiples movimientos.
 
 ```python
 Centaur.light_moves(("e2e4", "d2d4", "g1f3"))
 ```
 
 #### `Centaur.lights_off()`
-Turns off all LEDs.
+Apaga todos los LEDs.
 
 ```python
 Centaur.lights_off()
@@ -386,26 +384,26 @@ Centaur.lights_off()
 
 ---
 
-### Sounds
+### Sonidos
 
 #### `Centaur.sound(sound: Enums.Sound, override: Optional[Enums.Sound] = None)`
-Plays a sound.
+Reproduce un sonido.
 
-**Available sounds:**
+**Sonidos disponibles:**
 ```python
-Enums.Sound.MUSIC           # Music
-Enums.Sound.WRONG_MOVE      # Wrong move
-Enums.Sound.CORRECT_MOVE    # Correct move
-Enums.Sound.TAKEBACK_MOVE   # Takeback move
-Enums.Sound.COMPUTER_MOVE   # Computer move
-Enums.Sound.POWER_OFF       # Power off
-Enums.Sound.VICTORY         # Victory
-Enums.Sound.GAME_LOST       # Game lost
-Enums.Sound.VERY_GOOD_MOVE  # Very good move
-Enums.Sound.BAD_MOVE        # Bad move
+Enums.Sound.MUSIC           # Música
+Enums.Sound.WRONG_MOVE      # Movimiento incorrecto
+Enums.Sound.CORRECT_MOVE    # Movimiento correcto
+Enums.Sound.TAKEBACK_MOVE   # Retroceder movimiento
+Enums.Sound.COMPUTER_MOVE   # Movimiento de computadora
+Enums.Sound.POWER_OFF       # Apagar
+Enums.Sound.VICTORY         # Victoria
+Enums.Sound.GAME_LOST       # Derrota
+Enums.Sound.VERY_GOOD_MOVE  # Muy buen movimiento
+Enums.Sound.BAD_MOVE        # Mal movimiento
 ```
 
-**Example:**
+**Ejemplo:**
 ```python
 Centaur.sound(Enums.Sound.CORRECT_MOVE)
 Centaur.sound(Enums.Sound.VICTORY)
@@ -413,67 +411,67 @@ Centaur.sound(Enums.Sound.VICTORY)
 
 ---
 
-### Chess Engine
+### Motor de Ajedrez
 
 #### `Centaur.start_game(...)`
-Starts a new game.
+Inicia una nueva partida.
 
 ```python
 Centaur.start_game(
-    white="You",              # White player name
-    black="Bot",              # Black player name
-    event="My Event 2024",    # Event name
-    site="",                  # Site (optional)
+    white="You",              # Nombre jugador blancas
+    black="Bot",              # Nombre jugador negras
+    event="My Event 2024",    # Nombre del evento
+    site="",                  # Sitio (opcional)
     flags=Enums.BoardOption.CAN_UNDO_MOVES | Enums.BoardOption.CAN_FORCE_MOVES
 )
 ```
 
-**Board options (flags):**
+**Opciones de tablero (flags):**
 ```python
-Enums.BoardOption.CAN_FORCE_MOVES      # Allow forcing moves
-Enums.BoardOption.CAN_UNDO_MOVES       # Allow undo
-Enums.BoardOption.DB_RECORD_DISABLED   # Disable DB recording
-Enums.BoardOption.EVALUATION_DISABLED  # Disable evaluation
-Enums.BoardOption.PARTIAL_PGN_DISABLED # Disable partial PGN
-Enums.BoardOption.RESUME_DISABLED      # Disable resume
+Enums.BoardOption.CAN_FORCE_MOVES      # Permitir forzar movimientos
+Enums.BoardOption.CAN_UNDO_MOVES       # Permitir deshacer
+Enums.BoardOption.DB_RECORD_DISABLED   # Deshabilitar grabación BD
+Enums.BoardOption.EVALUATION_DISABLED  # Deshabilitar evaluación
+Enums.BoardOption.PARTIAL_PGN_DISABLED # Deshabilitar PGN parcial
+Enums.BoardOption.RESUME_DISABLED      # Deshabilitar reanudar
 ```
 
-You can combine flags using the `|` operator:
+Puedes combinar flags usando el operador `|`:
 ```python
 flags = Enums.BoardOption.CAN_UNDO_MOVES | Enums.BoardOption.CAN_FORCE_MOVES
 ```
 
 #### `Centaur.play_computer_move(uci_move: str)`
-Executes a computer move.
+Ejecuta un movimiento de la computadora.
 
 ```python
 Centaur.play_computer_move("e2e4")
 ```
 
 #### `Centaur.hint()`
-Shows a hint using the chess engine.
+Muestra una pista usando el motor de ajedrez.
 
 ```python
 Centaur.hint()
 ```
 
 #### `Centaur.set_main_chess_engine(engine_name: str)`
-Sets the main chess engine.
+Configura el motor de ajedrez principal.
 
 ```python
-Centaur.set_main_chess_engine("ct800")     # CT800 engine
+Centaur.set_main_chess_engine("ct800")     # Motor CT800
 Centaur.set_main_chess_engine("stockfish") # Stockfish
 ```
 
 #### `Centaur.configure_main_chess_engine(options: dict)`
-Configures engine options.
+Configura opciones del motor.
 
 ```python
 Centaur.configure_main_chess_engine({"UCI_Elo": 1800})
 ```
 
 #### `Centaur.request_chess_engine_move(callback, time: int = 5)`
-Requests the engine to calculate a move (asynchronous).
+Solicita al motor que calcule un movimiento (asíncrono).
 
 ```python
 def on_move_calculated(result: TPlayResult):
@@ -483,61 +481,61 @@ Centaur.request_chess_engine_move(on_move_calculated, time=3)
 ```
 
 #### `Centaur.request_chess_engine_evaluation(callback, time: int = 2, multipv: int = 1)`
-Requests position evaluation (asynchronous).
+Solicita evaluación de la posición (asíncrono).
 
 ```python
 def on_evaluation(results: Tuple[TAnalyseResult, ...]):
     result = results[0]
     score = result.score.pov(chess.WHITE)
-    print(f"Evaluation: {score}")
+    print(f"Evaluación: {score}")
 
 Centaur.request_chess_engine_evaluation(on_evaluation, time=2)
 ```
 
 ---
 
-### Utilities
+### Utilidades
 
 #### `Centaur.reverse_board(value: bool = True)`
-Reverses the board display.
+Invierte la visualización del tablero.
 
 ```python
-Centaur.reverse_board()  # Reverse
+Centaur.reverse_board()  # Invertir
 Centaur.reverse_board(False)  # Normal
 ```
 
 #### `Centaur.delayed_call(call: callable, delay: int)`
-Executes a function after a delay (milliseconds).
+Ejecuta una función después de un delay (milisegundos).
 
 ```python
-def my_function():
-    print("Executed after 2 seconds")
+def mi_funcion():
+    print("Ejecutado después de 2 segundos")
 
-Centaur.delayed_call(my_function, 2000)
+Centaur.delayed_call(mi_funcion, 2000)
 ```
 
 #### `self.chessboard`
-Accesses the current chess board (`chess.Board` object).
+Accede al tablero de ajedrez actual (objeto `chess.Board`).
 
 ```python
-# View current turn
+# Ver turno actual
 turn = self.chessboard.turn
 
-# View legal moves
+# Ver movimientos legales
 legal_moves = list(self.chessboard.legal_moves)
 
-# View current FEN
+# Ver FEN actual
 fen = self.chessboard.fen()
 
-# Check game over
+# Verificar fin de juego
 is_over = self.chessboard.is_game_over()
 ```
 
 ---
 
-## Complete Examples
+## Ejemplos Completos
 
-### Example 1: Simple Bot with Random Moves
+### Ejemplo 1: Bot Simple que Juega Movimientos Aleatorios
 
 ```python
 import chess, random
@@ -565,7 +563,7 @@ class RandomBot(Plugin):
             Centaur.header(f"{current_player} {'W' if turn == chess.WHITE else 'B'}")
 
             if turn == (not HUMAN_COLOR):
-                # Choose random move
+                # Elegir movimiento aleatorio
                 uci_move = str(random.choice(list(self.chessboard.legal_moves)))
                 Centaur.play_computer_move(uci_move)
 
@@ -589,7 +587,7 @@ class RandomBot(Plugin):
 
 ---
 
-### Example 2: Educational Game - Squiz (Find the Square)
+### Ejemplo 2: Juego Educativo - Squiz (Encuentra la Casilla)
 
 ```python
 import chess, random
@@ -628,7 +626,7 @@ class Squiz(Plugin):
 
         Centaur.clear_screen()
 
-        # Generate random square
+        # Generar casilla aleatoria
         self._random_square = chess.square_name(random.randint(0, 63))
 
         Centaur.print(f"Question {self._qindex}", row=2)
@@ -669,7 +667,7 @@ class Squiz(Plugin):
 
 ---
 
-### Example 3: Adaptive Bot with Chess Engine
+### Ejemplo 3: Bot Adaptativo con Motor de Ajedrez
 
 ```python
 import chess
@@ -677,7 +675,7 @@ from DGTCentaurMods.classes.Plugin import Plugin, Centaur, TPlayResult, TAnalyse
 from DGTCentaurMods.consts import Enums, fonts
 from typing import Optional, Tuple
 
-class AdaptiveBot(Plugin):
+class AdaptativeBot(Plugin):
 
     def __init__(self, id: str):
         super().__init__(id)
@@ -699,13 +697,13 @@ class AdaptiveBot(Plugin):
             result = results[0]
             score = result.score.pov(self.HUMAN_COLOR)
 
-            # Get evaluation in centipawns
+            # Obtener evaluación en centipawns
             cp = score.score()
             if cp:
-                # Adjust level based on evaluation
-                if cp > 200:  # Player winning
+                # Ajustar nivel según evaluación
+                if cp > 200:  # Jugador gana
                     new_elo = min(2400, self._elo + 100)
-                elif cp < -200:  # Player losing
+                elif cp < -200:  # Jugador pierde
                     new_elo = max(1000, self._elo - 100)
                 else:
                     new_elo = 1500
@@ -768,53 +766,53 @@ class AdaptiveBot(Plugin):
 
 ---
 
-## Best Practices
+## Mejores Prácticas
 
-### 1. Naming Convention
-- **File and class must match**: `MyPlugin.py` → `class MyPlugin(Plugin):`
-- Use CamelCase for class names
-- Descriptive names that indicate functionality
+### 1. Nomenclatura
+- **Archivo y clase deben coincidir**: `MiPlugin.py` → `class MiPlugin(Plugin):`
+- Usar CamelCase para nombres de clases
+- Nombres descriptivos que indiquen la funcionalidad
 
-### 2. Resource Management
-- Always call `super().start()` and `super().stop()`
-- Clean up resources in `stop()` (chess engines, timers, etc.)
-- Don't maintain state between different plugin instances
+### 2. Gestión de Recursos
+- Siempre llamar `super().start()` y `super().stop()`
+- Limpiar recursos en `stop()` (motores de ajedrez, timers, etc.)
+- No mantener estados entre diferentes instancias del plugin
 
-### 3. Event Handling
+### 3. Manejo de Eventos
 ```python
 def event_callback(self, event: Enums.Event, outcome: Optional[chess.Outcome]):
-    # Always handle QUIT
+    # Siempre manejar QUIT
     if event == Enums.Event.QUIT:
         self.stop()
 
-    # Handle TERMINATION for game end
+    # Manejar TERMINATION para fin de juego
     if event == Enums.Event.TERMINATION:
-        # Show result
+        # Mostrar resultado
         pass
 ```
 
-### 4. Asynchronous Callbacks
-When using chess engines, callbacks are asynchronous:
+### 4. Callbacks Asíncronos
+Cuando uses motores de ajedrez, los callbacks son asíncronos:
 
 ```python
 def event_callback(self, event: Enums.Event, outcome: Optional[chess.Outcome]):
     if event == Enums.Event.PLAY:
         if self.chessboard.turn == computer_turn:
-            # Callback will be invoked when engine finishes
+            # Callback será invocado cuando el motor termine
             def on_move_ready(result: TPlayResult):
                 Centaur.play_computer_move(str(result.move))
 
             Centaur.request_chess_engine_move(on_move_ready, time=5)
 ```
 
-### 5. User Feedback
-- Use appropriate sounds for each action
-- Update display regularly with `Centaur.header()`
-- Light up LEDs to guide the user
-- Provide visual and audio feedback
+### 5. Feedback al Usuario
+- Usar sonidos apropiados para cada acción
+- Actualizar el display regularmente con `Centaur.header()`
+- Iluminar LEDs para guiar al usuario
+- Proporcionar feedback visual y auditivo
 
-### 6. License
-Always include the GPL v3 license header at the beginning of the file:
+### 6. Licencia
+Incluir siempre el header de licencia GPL v3 al inicio del archivo:
 
 ```python
 # This file is part of the DGTCentaur Mods open source software
@@ -828,47 +826,47 @@ Always include the GPL v3 license header at the beginning of the file:
 ```
 
 ### 7. Testing
-- Test all callbacks
-- Verify behavior with illegal moves
-- Test BACK button in different states
-- Verify resource cleanup on exit
+- Probar todos los callbacks
+- Verificar el comportamiento con movimientos ilegales
+- Probar el botón BACK en diferentes estados
+- Verificar la limpieza de recursos al salir
 
-### 8. Documentation
-- Document the plugin's purpose in the class docstring
-- Comment complex logic
-- Include usage examples if the plugin has special configuration
+### 8. Documentación
+- Documentar el propósito del plugin en el docstring de la clase
+- Comentar lógica compleja
+- Incluir ejemplos de uso si el plugin tiene configuración especial
 
 ---
 
-## Additional Resources
+## Recursos Adicionales
 
 - **python-chess**: https://python-chess.readthedocs.io/
-- **DGTCentaurMods Repository**: https://github.com/Alistair-Crompton/DGTCentaurMods
-- **Existing Plugins**: See examples in the `plugins/` directory
+- **Repositorio DGTCentaurMods**: https://github.com/Alistair-Crompton/DGTCentaurMods
+- **Plugins existentes**: Ver los ejemplos en el directorio `plugins/`
 
 ---
 
-## Troubleshooting
+## Solución de Problemas
 
-### Plugin doesn't appear in menu
-- Verify that the file name matches the class
-- Ensure the class inherits from `Plugin`
-- Check for syntax errors in the code
+### El plugin no aparece en el menú
+- Verificar que el nombre del archivo coincida con la clase
+- Asegurar que la clase herede de `Plugin`
+- Revisar errores de sintaxis en el código
 
-### LEDs don't light up
-- Use `Centaur.flash(square)` or `Centaur.light_move(uci_move)`
-- Turn off LEDs with `Centaur.lights_off()` when necessary
+### Los LEDs no se iluminan
+- Usar `Centaur.flash(square)` o `Centaur.light_move(uci_move)`
+- Apagar LEDs con `Centaur.lights_off()` cuando sea necesario
 
-### Chess engine doesn't work
-- Initialize with `Centaur.set_main_chess_engine(engine_name)`
-- Verify the engine is available on the system
-- Use callbacks correctly for asynchronous operations
+### El motor de ajedrez no funciona
+- Inicializar con `Centaur.set_main_chess_engine(engine_name)`
+- Verificar que el motor esté disponible en el sistema
+- Usar callbacks correctamente para operaciones asíncronas
 
-### Screen doesn't update
-- Call `Centaur.clear_screen()` before drawing
-- Use `row` to position text correctly
-- Verify text is not too long
+### La pantalla no se actualiza
+- Llamar `Centaur.clear_screen()` antes de dibujar
+- Usar `row` para posicionar texto correctamente
+- Verificar que el texto no sea demasiado largo
 
 ---
 
-Happy plugin development! 🎉
+¡Feliz desarrollo de plugins! 🎉
