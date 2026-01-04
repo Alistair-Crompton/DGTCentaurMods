@@ -85,3 +85,10 @@ SOUNDS_SETTINGS = [
     { "id":SOUND_VICTORY,"label":"Victory music" },
     { "id":SOUND_GAME_LOST,"label":"Game lost/draw music" },
 ]
+
+# *edit by Chemtech1* - Hint settings configuration
+HINT_ENABLED = "hint_enabled"
+
+HINT_SETTINGS = [
+    { "id":HINT_ENABLED, "label":"Hint enabled" },
+]

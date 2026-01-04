@@ -165,6 +165,15 @@
 						</div>
 					</md-dialog>
 					</div>
+					<!-- *edit by Chemtech1* - Legacy AngularJS support for hint settings -->
+					<div class="md-dialog-container" id="hint_settings">
+					<md-dialog layout-padding>
+						<h3>Hint on/off</h3>
+						<div class="smallfont" class="md-dense" layout="column" layout-align="center start">
+							<md-switch data-ng-repeat="item in main.board.hints" ng-click="main.updateAppSettings('hint_settings_set', item)" ng-model="item.value">[[item.label]]</md-switch>
+						</div>
+					</md-dialog>
+					</div>
 					<div class="md-dialog-container" id="previous_games">
 						<md-dialog layout-padding>
 							<h3>Previous games...</h3>

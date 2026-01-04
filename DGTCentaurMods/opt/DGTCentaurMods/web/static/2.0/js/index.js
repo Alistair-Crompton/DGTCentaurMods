@@ -590,6 +590,20 @@ angular.module("dgt-centaur-mods", ['ngMaterial', 'angular-storage', 'ngAnimate'
 
 								},
 
+								// *edit by Chemtech1* - Legacy AngularJS support for hint settings
+								hint_settings: (value) => {
+
+									me.board.hints = value
+
+									$mdDialog.show({
+										contentElement: '#hint_settings',
+										parent: angular.element(document.body),
+										targetEvent: null,
+										clickOutsideToClose: true
+									})
+
+								},
+
 								// Previous games have been resquested
 								previous_games: (value) => {
 

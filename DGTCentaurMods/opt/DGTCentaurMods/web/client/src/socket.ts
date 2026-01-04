@@ -45,6 +45,7 @@ export const inbound = reactive({
   release: [],
   script_output: [],
   sounds_settings: [],
+  hint_settings: [], // *edit by Chemtech1* - Hint settings socket queue
   tip_uci_move: [],
   tip_uci_moves: [],
   turn_caption: [],

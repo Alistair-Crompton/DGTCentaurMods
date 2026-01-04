@@ -122,6 +122,12 @@ _MENU_ITEMS = [
                 Tag.ONLY_WEB: True,
                 Tag.ACTION: {Tag.TYPE: "socket_data", Tag.VALUE: "sounds_settings"},
             },
+            # *edit by Chemtech1* - Hint settings menu entry
+            {
+                Tag.LABEL: "💡 Hint on/off",
+                Tag.ONLY_WEB: True,
+                Tag.ACTION: {Tag.TYPE: "socket_data", Tag.VALUE: "hint_settings"},
+            },
         ],
     },
     {

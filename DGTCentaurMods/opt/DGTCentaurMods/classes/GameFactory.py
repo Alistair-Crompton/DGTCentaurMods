@@ -998,19 +998,32 @@ class Engine():
         self._new_evaluation_requested = False
 
     def update_evaluation(self, expectation:float=None, force:bool=False, text:str=None, disabled:bool=False):
-        
+
         if not self._started:
             return
-        
+
         if force:
             self._new_evaluation_requested = False
             SCREEN.draw_evaluation_bar(text=text, expectation=expectation, disabled=disabled)
         else:
             self._new_evaluation_requested = True
 
+    def _clear_disabled_after_delay(self):
+        time.sleep(3)
+        self.update_evaluation(force=True, disabled=True)
+
     def flash_hint(self, thinking_time = 1):
 
         if not self._started:
+            return
+
+        # *edit by Chemtech1* - Check if hint is enabled in settings
+        from DGTCentaurMods.classes.CentaurConfig import CentaurConfig
+        if not CentaurConfig.get_hint_settings(consts.HINT_ENABLED):
+            self.update_evaluation(force=True, text="disabled")
+            timer = Thread(target=self._clear_disabled_after_delay)
+            timer.daemon = True
+            timer.start()
             return
 
         try:

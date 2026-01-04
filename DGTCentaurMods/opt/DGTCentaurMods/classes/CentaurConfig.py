@@ -76,6 +76,15 @@ class CentaurConfig:
     def get_sound_settings(id:str)  -> bool:
         return CentaurConfig._get('sounds', id, '1') == '1'
 
+    # *edit by Chemtech1* - Hint settings methods
+    @staticmethod
+    def update_hint_settings(id:str, value:bool) -> None:
+        CentaurConfig._update('hint', id, '1' if value else '0', '1')
+
+    @staticmethod
+    def get_hint_settings(id:str)  -> bool:
+        return CentaurConfig._get('hint', id, '1') == '1'
+
     @staticmethod
     def update_lichess_settings(id:str, value:str) -> None:
         CentaurConfig._update('lichess', id, value, '')
