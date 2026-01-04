@@ -1010,7 +1010,7 @@ class Engine():
 
     def _clear_disabled_after_delay(self):
         time.sleep(3)
-        self.update_evaluation(force=True, disabled=True)
+        self.update_evaluation()
 
     def flash_hint(self, thinking_time = 1):
 
