@@ -1020,7 +1020,7 @@ class Engine():
         # *edit by Chemtech1* - Check if hint is enabled in settings
         from DGTCentaurMods.classes.CentaurConfig import CentaurConfig
         if not CentaurConfig.get_hint_settings(consts.HINT_ENABLED):
-            self.update_evaluation(force=True, text="disabled")
+            self.update_evaluation(force=True, text="hint disabled")
             timer = Thread(target=self._clear_disabled_after_delay)
             timer.daemon = True
             timer.start()
