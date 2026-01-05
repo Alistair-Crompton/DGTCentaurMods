@@ -393,6 +393,22 @@ def on_request(message):
 
 				socketio.emit('web_message', response)
 
+			# *edit by Chemtech1* - Hint settings handlers
+			if action == "hint_settings_set":
+
+				if "value" in message:
+					CentaurConfig.update_hint_settings(message["value"]["id"], message["value"]["value"])
+
+			if action == "hint_settings":
+
+				# We read the hint settings
+				for s in consts.HINT_SETTINGS:
+					s["value"] = CentaurConfig.get_hint_settings(s["id"])
+
+				response["hint_settings"] = consts.HINT_SETTINGS
+
+				socketio.emit('web_message', response)
+
 			if action == "game_moves":
 				response["game_moves"] = _dal.read_game_moves_by_id(message["id"])
 				socketio.emit('web_message', response)

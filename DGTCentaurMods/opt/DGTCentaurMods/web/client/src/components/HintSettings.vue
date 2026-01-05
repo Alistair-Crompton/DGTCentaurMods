@@ -21,18 +21,42 @@ This and any other notices must remain intact and unaltered in any
 distribution, modification, variant, or derivative of this software.
 -->
 
+<!-- *edit by Chemtech1* - Hint settings component -->
 <template>
-  <ConfirmColor />
-  <SoundSettings />
-  <HintSettings /> <!-- *edit by Chemtech1* - Hint settings component -->
-  <ViewPgn />
-  <WebSettings />
+  <dialog :class="['modal', { 'modal-open': hints.length }]">
+    <div class="modal-box">
+      <h3 class="font-bold">💡 Hint on/off</h3>
+      <div><ul class="menu">
+        <li v-for="hint in hints" :key="hint">
+          <label>
+            <input
+              @change="updateAppSetings(hint)"
+              class="toggle"
+              type="checkbox"
+              v-model="hint.value"
+            />
+            {{ hint.label }}
+          </label>
+        </li>
+      </ul></div>
+      <div class="modal-action">
+        <button @click="hints = []" class="btn btn-primary">Close</button>
+      </div>
+    </div>
+  </dialog>
 </template>
 
 <script setup lang="ts">
-import ConfirmColor from './ConfirmColor.vue'
-import SoundSettings from './SoundSettings.vue'
-import HintSettings from './HintSettings.vue' // *edit by Chemtech1* - Hint settings import
-import ViewPgn from './ViewPgn.vue'
-import WebSettings from './WebSettings.vue'
+import { dequeue, emit, inbound } from '../socket'
+import { shallowRef } from 'vue'
+
+const hints = shallowRef([])
+
+dequeue(inbound.hint_settings, (value) => {
+  hints.value = value
+})
+
+const updateAppSetings = (hint) => {
+  emit('request', { data: 'hint_settings_set', value: hint })
+}
 </script>
