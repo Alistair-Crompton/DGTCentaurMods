@@ -128,6 +128,15 @@ class PieceHandler:
             # No previous move
             return ""
 
+    def was_last_move_castling(self) -> bool:
+        if len(self._chessboard.move_stack) == 0:
+            return False
+        move = self._chessboard.pop()
+        castling_before = self._chessboard.fen().split()[2]
+        self._chessboard.push(move)
+        castling_after = self._chessboard.fen().split()[2]
+        return castling_before != castling_after
+
     def _wrong_move(self) -> None:
         """Alert user to illegal move attempt"""
 
@@ -301,6 +310,8 @@ class PieceHandler:
 
     def _is_takeback(self) -> bool:
         """Is this an attempt to take back a move?"""
+        if self.was_last_move_castling():
+            return False
         return not self._piece_color_is_consistent and \
             self._can_undo_moves and \
             self._move_name() == self._undo_name()

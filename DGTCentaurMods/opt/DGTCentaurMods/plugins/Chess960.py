@@ -114,7 +114,8 @@ class Chess960(Plugin):
     def on_start_callback(self, key:Enums.Btn) -> bool:
 
         # Generate random Chess960 position
-        chess960_pos = random.randint(0, 959)
+        # chess960_pos = random.randint(0, 959)
+        chess960_pos = 537
         board = chess.Board.from_chess960_pos(chess960_pos)
         # Chess960 Plugin edit by Chemtech1 - Castling rights are automatically set correctly by from_chess960_pos()
         self._chess960_fen = board.fen()
