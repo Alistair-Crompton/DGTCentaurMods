@@ -19,12 +19,14 @@
 # This and any other notices must remain intact and unaltered in any
 # distribution, modification, variant, or derivative of this software.
 
+# Created by chemtech1
+
 # Chess960 Plugin edit by Chemtech1 - New Chess960 bot plugin that generates random Chess960 positions and plays with Stockfish engine
 
 import chess, random
 
 from DGTCentaurMods.classes.Plugin import Plugin, Centaur
-from DGTCentaurMods.classes import Log
+from DGTCentaurMods.classes import Log, ChessEngine
 from DGTCentaurMods.consts import Enums, fonts
 
 from typing import Optional
@@ -38,6 +40,65 @@ class Chess960(Plugin):
     def __init__(self, id:str):
         super().__init__(id)
         self._chess960_fen = None
+
+    def __event_callback(self, event:Enums.Event, outcome:Optional[chess.Outcome]):
+        try:
+            if self._started:
+                self.event_callback(event, outcome)
+        except:
+            SOCKET.send_web_message({ "script_output":Log.last_exception() })
+            self.stop()
+
+    def __move_callback(self, uci_move:str, san_move:str, color:chess.Color, field_index:chess.Square):
+        try:
+            if self._started:
+                return self.move_callback(uci_move, san_move, color, field_index)
+        except:
+            SOCKET.send_web_message({ "script_output":Log.last_exception() })
+            self.stop()
+        return False
+
+    def __undo_callback(self, uci_move:str, san_move:str, field_index:chess.Square):
+        try:
+            if self._started:
+                return self.undo_callback(uci_move, san_move, field_index)
+        except:
+            SOCKET.send_web_message({ "script_output":Log.last_exception() })
+            self.stop()
+        return False
+
+    def __socket_callback(self, data:dict, _) -> bool:
+        try:
+            if len(data.keys())>0:
+                if consts.BOT_MESSAGE in data:
+                    self.on_bot_request(data[consts.BOT_MESSAGE])
+                    return True
+                if self._started:
+                    return self.on_socket_request(data)
+        except:
+            SOCKET.send_web_message({ "script_output":Log.last_exception() })
+            self.stop()
+        return False
+
+    def __key_callback(self, key:Enums.Btn):
+        try:
+            if key == Enums.Btn.BACK:
+                if self._game_engine:
+                    self._game_engine.end()
+                else:
+                    self.stop()
+                return True
+            
+            if not self._started:
+                self._started = self.on_start_callback(key)
+            
+            if not self._started:
+                return False
+
+            return self.key_callback(key)
+        except:
+            SOCKET.send_web_message({ "script_output":Log.last_exception() })
+            self.stop()
 
     # This function is automatically invoked when
     # the user launches the plugin.
@@ -97,6 +158,27 @@ class Chess960(Plugin):
             if turn == (not HUMAN_COLOR):
                 # Computer turn - request move from Stockfish
                 Centaur.request_chess_engine_move(self._on_engine_move_ready)
+
+    def _start_game(self, event:str, site:str, white:str, black:str, flags:Enums.BoardOption, chess_engine: Optional[ChessEngine.ChessEngineWrapper] = None, custom_fen:str = None):
+        from DGTCentaurMods.classes.GameFactoryChess960 import Engine
+        self._game_engine = Engine(
+            undo_callback = self.__undo_callback,
+            event_callback = self.__event_callback,
+            key_callback = self.__key_callback,
+            move_callback = self.__move_callback,
+            socket_callback = self.__socket_callback,
+            flags = flags,
+            chess_engine = chess_engine,
+            game_informations = {
+                "event" : event,
+                "site"  : site,
+                "round" : "",
+                "white" : white,
+                "black" : black,
+            },
+            custom_fen = custom_fen
+        )
+        self._game_engine.start()
 
     def _on_engine_move_ready(self, result):
         """Callback when Stockfish move is ready"""

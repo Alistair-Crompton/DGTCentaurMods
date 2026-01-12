@@ -80,11 +80,6 @@ class Centaur():
         SOCKET.send_web_message({ consts.BOT_MESSAGE: message })
 
     @staticmethod
-    def send_web_message(message:dict):
-
-        SOCKET.send_web_message(message)
-
-    @staticmethod
     def push_button(button:Enums.Btn):
         CENTAUR_BOARD.push_button(button)
    
@@ -178,11 +173,10 @@ class Centaur():
                 site:str="",
                 white:str="",
                 black:str="",
-                flags:Enums.BoardOption=Enums.BoardOption.CAN_FORCE_MOVES | Enums.BoardOption.CAN_UNDO_MOVES,
-                custom_fen:str=None):  # Chess960 Plugin edit by Chemtech1 - Add custom FEN parameter to pass Chess960 starting positions to game engine
+                flags:Enums.BoardOption=Enums.BoardOption.CAN_FORCE_MOVES | Enums.BoardOption.CAN_UNDO_MOVES):
 
         if Centaur._plugin:
-            Centaur._plugin._start_game(event,site,white,black,flags, chess_engine=Centaur._chess_engine, custom_fen=custom_fen)
+            Centaur._plugin._start_game(event,site,white,black,flags, chess_engine=Centaur._chess_engine)
 
     @staticmethod
     def play_computer_move(uci_move:str):
@@ -491,11 +485,11 @@ class Plugin():
         return self._game_engine.computer_move_is_ready
         
     # Invoked from Centaur API
-    def _start_game(self, event:str, site:str, white:str, black:str, flags:Enums.BoardOption, chess_engine: Optional[ChessEngine.ChessEngineWrapper] = None, custom_fen:str = None):  # Chess960 Plugin edit by Chemtech1 - Add custom FEN parameter to _start_game method for Chess960 position support
-
+    def _start_game(self, event:str, site:str, white:str, black:str, flags:Enums.BoardOption, chess_engine: Optional[ChessEngine.ChessEngineWrapper] = None):
+        
         if self._game_engine == None:
             self._game_engine = GameFactory.Engine(
-
+            
                 undo_callback = self.__undo_callback,
                 event_callback = self.__event_callback,
                 key_callback = self.__key_callback,
@@ -505,15 +499,14 @@ class Plugin():
                 flags = flags,
 
                 chess_engine = chess_engine,
-
+                
                 game_informations = {
                     "event" : event,
                     "site"  : site,
                     "round" : "",
                     "white" : white,
                     "black" : black,
-                },
-                custom_fen = custom_fen)  # Chess960 Plugin edit by Chemtech1 - Pass custom FEN parameter to GameFactory.Engine constructor for Chess960 support
+                })
 
             self._game_engine.start()
 
