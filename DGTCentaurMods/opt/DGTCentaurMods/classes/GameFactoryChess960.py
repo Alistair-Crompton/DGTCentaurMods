@@ -1190,12 +1190,13 @@ class Engine():
         board_state = CENTAUR_BOARD.get_board_state()
 
         # TODO: handle the bytearray exception.
-        try:
-            if bytearray(board_state) == consts.BOARD_START_STATE:
-                self._need_starting_position_check = True
-                return
-        except:
-            pass
+    # Chess960 Plugin edit by Chemtech1 - Disable BOARD_START_STATE check for Chess960 (always custom FEN)
+    # try:
+    #     if bytearray(board_state) == consts.BOARD_START_STATE:
+    #         self._need_starting_position_check = True
+    #         return
+    # except:
+    #     pass
 
         business_board_state = common.Converters.fen_to_board_state(self._chessboard.fen())
         invalid_squares = []

@@ -224,19 +224,19 @@ class Chess960(Plugin):
         Log.info("Chess960: Engine configured (Chess960 mode auto-detected from FEN)")
 
         # Start a new game with Chess960 position
-        Centaur.start_game(
+        self._start_game(
+            event="Chess960 Event",
+            site="",
             white="You",
             black="Chess960 bot",
-            event="Chess960 Event",
             flags=Enums.BoardOption.CAN_UNDO_MOVES,
+            chess_engine=None,
             custom_fen=self._chess960_fen  # Chess960 Plugin edit by Chemtech1 - Pass custom FEN for Chess960 starting position
         )
 
         Log.info("Chess960: Game started with custom FEN")
 
-        # Chess960 Plugin edit by Chemtech1 - Ensure Chess960 FEN is sent to web interface for correct board display
-        Centaur.send_web_message({"fen": self._chess960_fen})
-        Log.info(f"Chess960: FEN sent to web interface: {self._chess960_fen}")
+        # Chess960 Plugin edit by Chemtech1 - Ensure Chess960 FEN is sent to web interface for correct board display (handled by update_web_ui)
 
         # Game started.
         return True
