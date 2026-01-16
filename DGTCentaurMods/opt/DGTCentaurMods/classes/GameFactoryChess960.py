@@ -970,7 +970,7 @@ class Engine():
                 # Always initialize Chess960 game immediately
                 if self._need_starting_position_check:
 
-                    Log.info("Initializing Chess960 game")
+                    Log.info("Initializing Chess960 game - resetting to custom FEN")
 
                     SCREEN.clear_area()
 
@@ -978,6 +978,9 @@ class Engine():
                     self._need_starting_position_check = False
 
                     self.__initialize()
+
+                    # Ensure board is reset to original Chess960 FEN
+                    self._chessboard.set_fen(self._original_fen)
 
                     CENTAUR_BOARD.beep(Enums.Sound.MUSIC)
 
@@ -1190,13 +1193,14 @@ class Engine():
         board_state = CENTAUR_BOARD.get_board_state()
 
         # TODO: handle the bytearray exception.
-    # Chess960 Plugin edit by Chemtech1 - Disable BOARD_START_STATE check for Chess960 (always custom FEN)
-    # try:
-    #     if bytearray(board_state) == consts.BOARD_START_STATE:
-    #         self._need_starting_position_check = True
-    #         return
-    # except:
-    #     pass
+        # Chess960 Plugin edit by Chemtech1 - Re-enable BOARD_START_STATE check for Chess960 reset detection
+        try:
+            if bytearray(board_state) == consts.BOARD_START_STATE:
+                Log.info("Chess960 Reset detected: Board matches starting occupancy, triggering new game.")
+                self._need_starting_position_check = True
+                return
+        except:
+            pass
 
         business_board_state = common.Converters.fen_to_board_state(self._chessboard.fen())
         invalid_squares = []
@@ -1375,33 +1379,3 @@ class Engine():
         except Exception as e:
             Log.exception(Engine.set_computer_move, e)
             Log.exception(Engine.set_computer_move, e)
- 
-    def _update_board_state(self, web_move:bool):
-
-        if not self._started or web_move:
-            return
-
-        board_state = CENTAUR_BOARD.get_board_state()
-
-        # TODO: handle the bytearray exception.
-        try:
-            if bytearray(board_state) == consts.BOARD_START_STATE:
-                self._need_starting_position_check = True
-                return
-        except:
-            pass
-
-        business_board_state = common.Converters.fen_to_board_state(self._chessboard.fen())
-        invalid_squares = []
-        for square in range(0,64):
-            if business_board_state[square] != board_state[square]:
-                invalid_squares.append(square)
-
-        if len(invalid_squares):
-            self._invalid_board_state = True
-            CENTAUR_BOARD.led_array(invalid_squares, no_field_rotation=True)
-        else:
-            self._invalid_board_state = False
-            CENTAUR_BOARD.leds_off()
-            self._invalid_board_state = False
-        invalid_squares = []
