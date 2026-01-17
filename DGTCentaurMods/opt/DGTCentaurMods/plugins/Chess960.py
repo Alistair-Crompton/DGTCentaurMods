@@ -146,6 +146,12 @@ class Chess960(Plugin):
         if event == Enums.Event.QUIT:
             self.stop()
 
+        if event == Enums.Event.TERMINATION:
+            if outcome.winner == HUMAN_COLOR:
+                Centaur.sound(Enums.Sound.VICTORY)
+            else:
+                Centaur.sound(Enums.Sound.GAME_LOST)
+
         if event == Enums.Event.PLAY:
 
             turn = self.chessboard.turn
