@@ -801,9 +801,8 @@ class Engine():
             return False
 
     def _check_last_move_outcome_and_switch(self):
-        # Check the outcome (disable draw claiming for Chess960 compatibility)
-        # Skip outcome checking for Chess960 to avoid stack issues
-        outcome = None
+        # Check the outcome
+        outcome = self._chessboard.outcome(claim_draw=True)
 
         # Log all legal moves when turn switches to white (for debugging)
         if self._chessboard.turn == chess.WHITE:
