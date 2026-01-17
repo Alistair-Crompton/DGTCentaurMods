@@ -442,7 +442,7 @@ class PieceHandler:
 
                 # Piece has simply been placed back
                 pass
-            elif self._piece_color_is_consistent:
+            elif self._piece_color_is_consistent or (self._turn == (not chess.WHITE) and self._can_force_moves):
                 Log.debug(f"Normal move attempt: {self._move_name()}")
                 result = self._attempt_move()
             elif self._is_takeback():

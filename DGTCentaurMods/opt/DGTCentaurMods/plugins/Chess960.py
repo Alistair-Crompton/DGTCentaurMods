@@ -229,7 +229,7 @@ class Chess960(Plugin):
             site="",
             white="You",
             black="Chess960 bot",
-            flags=Enums.BoardOption.CAN_UNDO_MOVES,
+            flags=Enums.BoardOption.CAN_UNDO_MOVES | Enums.BoardOption.CAN_FORCE_MOVES,
             chess_engine=None,
             custom_fen=self._chess960_fen  # Chess960 Plugin edit by Chemtech1 - Pass custom FEN for Chess960 starting position
         )
