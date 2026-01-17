@@ -182,10 +182,10 @@ class Chess960(Plugin):
 
     def _on_engine_move_ready(self, result):
         """Callback when Stockfish move is ready"""
-        Log.info(f"Chess960: Engine move result received: {result}")
+        Log.info(f"DEBUG Chess960 Engine: result={result}")
         if result and result.move:
             uci_move = result.move.uci()
-            Log.info(f"Chess960: Playing computer move: {uci_move}")
+            Log.info(f"DEBUG Chess960 Engine UCI: '{uci_move}' (promo={len(uci_move)>4})")
             Centaur.play_computer_move(uci_move)
         else:
             Log.error("Chess960: Engine error - no move available")

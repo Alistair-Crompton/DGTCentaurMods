@@ -219,24 +219,19 @@ class PieceHandler:
             self, player_uci_move: str, promoted_piece: str = "") -> str:
 
         player_move = player_uci_move + promoted_piece
+        computer_base = self._computer_uci_move[0:4] if self._engine._computer_move_is_ready else ""
         if self._engine._computer_move_is_ready:
-            if self._can_force_moves and \
-                    player_uci_move != self._computer_uci_move:
-                # Player has overridden computer's choice of move
+            override = self._can_force_moves and not self._is_promotion() and player_uci_move != self._computer_uci_move[0:4]
+            if override:
                 self._engine._computer_uci_move = player_move
             else:
-                # Adopt computer's choice of move
-                player_move = self._computer_uci_move
+                player_move = self._engine._computer_uci_move
         return player_move
 
     def _finalize_move(
             self, player_uci_move: str, promoted_piece: str = "") -> bool:
 
         self._promotion_move = None
-
-        # Log all legal moves for current position
-        all_legal_moves = [move.uci() for move in self._chessboard.legal_moves]
-        Log.info(f'All legal moves for {self._turn}: {all_legal_moves}')
 
         if not self._is_legal_move(player_uci_move):
             Log.debug(f'ILLEGAL move "{player_uci_move}"')
@@ -1338,23 +1333,23 @@ class Engine():
         return self._computer_move_is_ready
 
     def set_computer_move(self, uci_move) -> bool:
-            
+
         try:
 
             if not self._started:
                 return False
 
+            legal_ucis = [str(m) for m in self._chessboard.legal_moves]
+
             try:
                 chess.Move.from_uci(uci_move)
-            except:
-                Log.debug(f'INVALID uci_computer_move:"{uci_move}"')
+            except Exception as e:
+                Log.error(f'INVALID uci_computer_move "{uci_move}": {e}')
                 return False
-            
-            if uci_move not in (str(move) for move in self._chessboard.legal_moves):
-                Log.debug(f'ILLEGAL uci_computer_move:"{uci_move}"')
+
+            if uci_move not in legal_ucis:
+                Log.error(f'ILLEGAL uci_computer_move "{uci_move}" not in {legal_ucis[:5]}...')
                 return False
-            
-            Log.debug(f'uci_computer_move:"{uci_move}"')
 
             # First set the globals so that the thread knows there is a computer move
             self._computer_uci_move = uci_move
