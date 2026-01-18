@@ -61,6 +61,9 @@ class PieceHandler:
         self._takeback_from_square = UNDEFINED_SQUARE
         self._takeback_to_square = UNDEFINED_SQUARE
 
+        # Castling adjustment tracking
+        self._last_move_was_castling = False
+
         # Local to a single field event
         self._web_move: bool = False
 
@@ -122,7 +125,8 @@ class PieceHandler:
 
     def _undo_name(self) -> str:
         """Move that undoes the previous move"""
-        if prev_move := self._engine.last_uci_move:
+        if self._undo_stack:
+            prev_move = self._undo_stack[-1]['move']
             return prev_move[2:4] + prev_move[0:2]
         else:
             # No previous move
@@ -186,6 +190,7 @@ class PieceHandler:
                 "san_move": san_move,
                 "field_index": self._place1
             })
+            self._last_move_was_castling = self.was_last_move_castling()
             self._engine._check_last_move_outcome_and_switch()
         else:
             # Fatal
@@ -254,7 +259,10 @@ class PieceHandler:
             return False
 
     def _is_promotion(self) -> bool:
-        piece_name = self._chessboard.piece_at(self._lift1).symbol()
+        piece = self._chessboard.piece_at(self._lift1)
+        if not piece:
+            return False
+        piece_name = piece.symbol()
 
         white_pawn, black_pawn = piece_name == "P", piece_name == "p"
 
@@ -305,17 +313,17 @@ class PieceHandler:
 
     def _is_takeback(self) -> bool:
         """Is this an attempt to take back a move?"""
-        if self.was_last_move_castling():
+        Log.debug(f"can_undo: {self._can_undo_moves}, move==undo: {self._move_name() == self._undo_name()}")
+        if self._last_move_was_castling and self._move_name() == self._undo_name():
             return False
-        return not self._piece_color_is_consistent and \
-            self._can_undo_moves and \
+        return self._can_undo_moves and \
             self._move_name() == self._undo_name()
 
     def _takeback_move(self, show_leds: bool = False) -> bool:
         """Previous move has been taken back"""
 
         if not self._undo_stack:
-            Log.debug("No moves to undo")
+            Log.debug("undo_stack empty")
             return False
 
         # Get the previous state from stack
@@ -368,7 +376,18 @@ class PieceHandler:
             san_move=previous_san_move,
             field_index=self._place1)
 
+        if not show_leds:
+            CENTAUR_BOARD.leds_off()
+            self._engine._check_last_move_outcome_and_switch()
+
+        Engine._Engine__invoke_callback(
+            self._engine._event_callback_function,
+            event=Enums.Event.PLAY,
+            outcome=None)
+
         self._engine.update_evaluation()
+
+        self._last_move_was_castling = False
 
         return True
 
@@ -432,12 +451,16 @@ class PieceHandler:
             # Normal event processing - Chess960 castling is now handled by standard moves
             self._normalize_event_order()
 
+            Log.debug(f"consistent? {self._piece_color_is_consistent}")
+            Log.debug(f"is_takeback? {self._is_takeback()}")
+            Log.debug(f"undo_name: {self._undo_name()}, move_name: {self._move_name()}")
+
             if self._lift1 == self._place1:
                 self._engine._update_board_state(self._web_move)
 
                 # Piece has simply been placed back
                 pass
-            elif self._piece_color_is_consistent or (self._turn == (not chess.WHITE) and self._can_force_moves):
+            elif self._piece_color_is_consistent:
                 Log.debug(f"Normal move attempt: {self._move_name()}")
                 result = self._attempt_move()
             elif self._is_takeback():
@@ -481,7 +504,7 @@ class PieceHandler:
                 # Start of new move
                 self._lift1 = field_index
         elif field_action == Enums.PieceAction.PLACE:
-            
+
             # If the state was not OK, we check again.
             if self._engine._invalid_board_state:
                 self._engine._update_board_state(self._web_move)
@@ -493,14 +516,17 @@ class PieceHandler:
                 return
             self._place1 = field_index
 
-            # Board needs to be OK before playing.
-            if not self._engine._invalid_board_state:
-                return self._interpret_actions()
-            else:
+            Log.debug(f"invalid_state: {self._engine._invalid_board_state}")
+
+            # Always interpret actions (allow takeback even if board invalid)
+            result = self._interpret_actions()
+
+            # If board was invalid, warn user
+            if self._engine._invalid_board_state:
                 CENTAUR_BOARD.beep(Enums.Sound.WRONG_MOVE)
                 Log.info("The board needs to be re-arranged!")
-            
-            return False
+
+            return result
 
         else:
             # Not expected
