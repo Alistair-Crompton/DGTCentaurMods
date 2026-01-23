@@ -23,15 +23,14 @@
 
 # Chess960 Plugin edit by Chemtech1 - New Chess960 bot plugin that generates random Chess960 positions and plays with Stockfish engine
 
-import chess, random
+import chess, random, os, configparser
+from pathlib import Path
 
 from DGTCentaurMods.classes.Plugin import Plugin, Centaur
 from DGTCentaurMods.classes import Log, ChessEngine
-from DGTCentaurMods.consts import Enums, fonts
+from DGTCentaurMods.consts import Enums, fonts, consts
 
 from typing import Optional
-
-HUMAN_COLOR = chess.WHITE
 
 # The plugin must inherits of the Plugin class.
 # Filename must match the class name.
@@ -40,6 +39,16 @@ class Chess960(Plugin):
     def __init__(self, id:str):
         super().__init__(id)
         self._chess960_fen = None
+
+        # Menu state management
+        self._menu_state = None      # "engine" | "strength" | "color" | None
+        self._ignore_next_play = False  # Ignore first PLAY after menu start
+        self._engines = []           # Available FRC engines
+        self._current_index = 0      # Menu navigation
+        self._selected_engine = None
+        self._strengths = []         # Engine strength levels
+        self._selected_strength = None
+        self._selected_color = chess.WHITE
 
     def __event_callback(self, event:Enums.Event, outcome:Optional[chess.Outcome]):
         try:
@@ -88,10 +97,12 @@ class Chess960(Plugin):
                 else:
                     self.stop()
                 return True
-            
+
             if not self._started:
                 self._started = self.on_start_callback(key)
-            
+                if self._started:
+                    return True  # Event was handled by on_start_callback, don't process again
+
             if not self._started:
                 return False
 
@@ -100,9 +111,55 @@ class Chess960(Plugin):
             SOCKET.send_web_message({ "script_output":Log.last_exception() })
             self.stop()
 
+    def _scan_frc_engines(self):
+        """Find engines that support UCI_Chess960"""
+        engines_dir = consts.ENGINES_CHESS960_DIRECTORY
+        self._engines = []
+
+        if not os.path.exists(engines_dir):
+            Log.error(f"Chess960: Engines directory not found: {engines_dir}")
+            return
+
+        for f in os.scandir(engines_dir):
+            if f.name.endswith('.uci'):
+                try:
+                    # Test if engine binary exists
+                    engine_binary = f.path[:-4]  # Remove .uci extension
+                    if os.path.exists(engine_binary):
+                        engine_name = f.name[:-4]  # Remove .uci extension
+                        self._engines.append({
+                            'name': engine_name,
+                            'uci_path': f.path,
+                            'binary_path': engine_binary
+                        })
+                        Log.info(f"Chess960: Found FRC engine: {engine_name}")
+                except Exception as e:
+                    Log.debug(f"Chess960: Skipping invalid engine {f.name}: {e}")
+
+        if not self._engines:
+            Log.error("Chess960: No FRC engines found!")
+        else:
+            Log.info(f"Chess960: Found {len(self._engines)} FRC engines")
+
+    def _load_engine_strengths(self, uci_path):
+        """Load strength levels from UCI file"""
+        parser = configparser.ConfigParser()
+        parser.read(uci_path)
+
+        self._strengths = []
+        for section in parser.sections():
+            if section.startswith('E-') or section.startswith('DEFAULT'):
+                self._strengths.append(section)
+
+        # Sort by ELO rating (DEFAULT first, then E-XXXX)
+        self._strengths.sort(key=lambda x: int(x[2:]) if x.startswith('E-') else 0)
+
+        Log.info(f"Chess960: Loaded {len(self._strengths)} strength levels")
+
     # This function is automatically invoked when
     # the user launches the plugin.
     def start(self):
+        self._scan_frc_engines()
         super().start()
 
     # This function is automatically invoked when
@@ -115,17 +172,173 @@ class Chess960(Plugin):
     # when the player physically plays a move.
     def move_callback(self, uci_move:str, san_move:str, color:chess.Color, field_index:chess.Square):
 
-        if color == (not HUMAN_COLOR):
+        if color == (not self._selected_color):
             # Computer move is accepted
             return True
 
         # Human move is accepted
         return True
 
+    def _update_menu_display(self):
+        """Update the screen to show current menu state"""
+        Centaur.clear_screen()
+
+        if self._menu_state == "engine":
+            Centaur.print("Select Engine", row=1)
+            if self._engines:
+                engine_name = self._engines[self._current_index]['name']
+                Centaur.print(f"{engine_name}", row=4, font=fonts.DIGITAL_FONT)
+                Centaur.print(f"{self._current_index + 1}/{len(self._engines)}", row=6)
+            else:
+                Centaur.print("No engines found!", row=4)
+
+        elif self._menu_state == "strength":
+            Centaur.print("Select Strength", row=1)
+            if self._strengths:
+                strength = self._strengths[self._current_index]
+                Centaur.print(f"{strength}", row=4, font=fonts.DIGITAL_FONT)
+                Centaur.print(f"{self._current_index + 1}/{len(self._strengths)}", row=6)
+            else:
+                Centaur.print("No strengths found!", row=4)
+
+        elif self._menu_state == "color":
+            Centaur.print("Select Color", row=1)
+            colors = ["White", "Black"]
+            color_name = colors[self._current_index]
+            Centaur.print(f"{color_name}", row=4, font=fonts.DIGITAL_FONT)
+            Centaur.print(f"{self._current_index + 1}/{len(colors)}", row=6)
+
+        Centaur.print("UP/DOWN: Navigate", row=8)
+        Centaur.print("PLAY: Select", row=9)
+        Centaur.print("BACK: Exit", row=10)
+
+    def _handle_menu_navigation(self, key:Enums.Btn) -> bool:
+        """Handle menu navigation keys"""
+        Log.info(f"Chess960: _handle_menu_navigation called with key={key}, state={self._menu_state}, index={self._current_index}")
+
+        if self._menu_state == "engine":
+            max_items = len(self._engines)
+        elif self._menu_state == "strength":
+            max_items = len(self._strengths)
+        elif self._menu_state == "color":
+            max_items = 2  # White or Black
+        else:
+            Log.info(f"Chess960: Invalid menu state: {self._menu_state}")
+            return False
+
+        if key == Enums.Btn.UP:
+            self._current_index = (self._current_index - 1) % max_items
+            Log.info(f"Chess960: UP pressed, new index: {self._current_index}")
+            self._update_menu_display()
+            return True
+        elif key == Enums.Btn.DOWN:
+            self._current_index = (self._current_index + 1) % max_items
+            Log.info(f"Chess960: DOWN pressed, new index: {self._current_index}")
+            self._update_menu_display()
+            return True
+        elif key == Enums.Btn.PLAY:
+            if self._ignore_next_play:
+                Log.info(f"Chess960: Ignoring PLAY event (menu just started)")
+                self._ignore_next_play = False  # Reset flag
+                return True  # Ignore this PLAY event
+            Log.info(f"Chess960: PLAY pressed, calling _handle_menu_selection")
+            self._handle_menu_selection()
+            return True
+
+        Log.info(f"Chess960: Key {key} not handled in menu navigation")
+        return False
+
+    def _handle_menu_selection(self):
+        """Handle menu selection and state transitions"""
+        Log.info(f"Chess960: _handle_menu_selection called, state={self._menu_state}, index={self._current_index}")
+
+        if self._menu_state == "engine":
+            if self._engines:
+                self._selected_engine = self._engines[self._current_index]
+                Log.info(f"Chess960: Selected engine: {self._selected_engine['name']}")
+                self._load_engine_strengths(self._selected_engine['uci_path'])
+                self._menu_state = "strength"
+                self._current_index = 0
+                self._update_menu_display()
+            else:
+                Log.error("Chess960: No engines available for selection")
+
+        elif self._menu_state == "strength":
+            if self._strengths:
+                self._selected_strength = self._strengths[self._current_index]
+                Log.info(f"Chess960: Selected strength: {self._selected_strength}")
+                self._menu_state = "color"
+                self._current_index = 0
+                self._update_menu_display()
+            else:
+                Log.error("Chess960: No strengths available for selection")
+
+        elif self._menu_state == "color":
+            self._selected_color = chess.WHITE if self._current_index == 0 else chess.BLACK
+            Log.info(f"Chess960: Selected color: {'WHITE' if self._selected_color == chess.WHITE else 'BLACK'}")
+            self._menu_state = None  # Exit menu, start game
+            Log.info(f"Chess960: Starting game...")
+            self._start_selected_game()
+
+    def _start_selected_game(self):
+        """Start the game with selected parameters"""
+        # Generate random Chess960 position
+        chess960_pos = random.randint(0, 959)
+        board = chess.Board.from_chess960_pos(chess960_pos)
+        self._chess960_fen = board.fen()
+
+        Log.info(f"Chess960: Generated position {chess960_pos}")
+        Log.info(f"Chess960: FEN: {self._chess960_fen}")
+
+        # Set up selected engine
+        engine_name = self._selected_engine['name']
+        Centaur.set_main_chess_engine(engine_name)
+
+        # Configure engine with selected strength
+        config = {}
+        if self._selected_strength != "DEFAULT":
+            parser = configparser.ConfigParser()
+            parser.read(self._selected_engine['uci_path'])
+            if parser.has_section(self._selected_strength):
+                for key, value in parser.items(self._selected_strength):
+                    config[key] = value
+
+        config["Threads"] = 1
+        Centaur.configure_main_chess_engine(config)
+
+        Log.info(f"Chess960: Engine configured: {engine_name} with {self._selected_strength}")
+
+        # Determine player names based on color selection
+        if self._selected_color == chess.WHITE:
+            white_player = "You"
+            black_player = f"{engine_name} {self._selected_strength}"
+        else:
+            white_player = f"{engine_name} {self._selected_strength}"
+            black_player = "You"
+
+        # Start a new game with Chess960 position
+        self._start_game(
+            event="Chess960 Event",
+            site="",
+            white=white_player,
+            black=black_player,
+            flags=Enums.BoardOption.CAN_UNDO_MOVES | Enums.BoardOption.CAN_FORCE_MOVES,
+            chess_engine=None,
+            custom_fen=self._chess960_fen
+        )
+
+        Log.info("Chess960: Game started with selected parameters")
+
     # This function is automatically invoked each
     # time the player pushes a key.
     # Except the BACK key which is handled by the engine.
     def key_callback(self, key:Enums.Btn):
+        Log.info(f"Chess960: key_callback called with key={key}, menu_state={self._menu_state}")
+
+        # Handle menu navigation if we're still in menu mode
+        if self._menu_state is not None:
+            Log.info(f"Chess960: Calling _handle_menu_navigation")
+            return self._handle_menu_navigation(key)
 
         # If the user pushes HELP,
         # we display an hint using Stockfish engine.
@@ -135,6 +348,7 @@ class Chess960(Plugin):
             return True
 
         # Key can be handled by the engine.
+        Log.info(f"Chess960: Key not handled, returning False")
         return False
 
     # When exists, this function is automatically invoked
@@ -147,7 +361,7 @@ class Chess960(Plugin):
             self.stop()
 
         if event == Enums.Event.TERMINATION:
-            if outcome.winner == HUMAN_COLOR:
+            if outcome.winner == self._selected_color:
                 Centaur.sound(Enums.Sound.VICTORY)
             else:
                 Centaur.sound(Enums.Sound.GAME_LOST)
@@ -156,12 +370,12 @@ class Chess960(Plugin):
 
             turn = self.chessboard.turn
 
-            current_player = "You" if turn == chess.WHITE else "Chess960 bot"
+            current_player = "You" if turn == self._selected_color else f"{self._selected_engine['name']} {self._selected_strength}"
 
             # We display the board header.
             Centaur.header(f"{current_player} {'W' if turn == chess.WHITE else 'B'}")
 
-            if turn == (not HUMAN_COLOR):
+            if turn == (not self._selected_color):
                 # Computer turn - request move from Stockfish
                 Centaur.request_chess_engine_move(self._on_engine_move_ready)
 
@@ -200,52 +414,18 @@ class Chess960(Plugin):
      # When exists, this function is automatically invoked
      # at start, after splash screen, on PLAY button.
     def on_start_callback(self, key:Enums.Btn) -> bool:
+        Log.info(f"Chess960: on_start_callback called with key={key}")
+        # Start the menu system
+        if key == Enums.Btn.PLAY:
+            Log.info(f"Chess960: Setting menu_state to 'engine'")
+            self._menu_state = "engine"  # Now activate menu
+            self._ignore_next_play = True  # Ignore the next PLAY event
+            self._update_menu_display()
+            Log.info(f"Chess960: Returning True from on_start_callback")
+            return True  # Plugin is now started, menu is active
 
-        # Generate random Chess960 position
-        # chess960_pos = random.randint(0, 959)
-        chess960_pos = 537
-        board = chess.Board.from_chess960_pos(chess960_pos)
-        # Chess960 Plugin edit by Chemtech1 - Castling rights are automatically set correctly by from_chess960_pos()
-        self._chess960_fen = board.fen()
-
-        Log.info(f"Chess960: Generated position {chess960_pos}")
-        Log.info(f"Chess960: FEN: {self._chess960_fen}")
-
-        # Log Chess960 mode status
-        if 'KQkq' in self._chess960_fen:
-            Log.info("Chess960: Engine is in Chess960 mode (FRC castling rights detected)")
-        else:
-            Log.debug("Chess960: Engine may not be in Chess960 mode (no FRC castling rights)")
-
-        Centaur.print(f"Chess960 pos: {chess960_pos}", row=6)
-
-        # Set up Stockfish engine for Chess960 BEFORE starting the game
-        # Note: UCI_Chess960 is automatically managed by python-chess based on FEN
-        Centaur.set_main_chess_engine("stockfish")
-        Centaur.configure_main_chess_engine({
-            "UCI_Elo": 1350,       # Set exact ELO rating
-            "Threads": 1
-        })
-
-        Log.info("Chess960: Engine configured (Chess960 mode auto-detected from FEN)")
-
-        # Start a new game with Chess960 position
-        self._start_game(
-            event="Chess960 Event",
-            site="",
-            white="You",
-            black="Chess960 bot",
-            flags=Enums.BoardOption.CAN_UNDO_MOVES | Enums.BoardOption.CAN_FORCE_MOVES,
-            chess_engine=None,
-            custom_fen=self._chess960_fen  # Chess960 Plugin edit by Chemtech1 - Pass custom FEN for Chess960 starting position
-        )
-
-        Log.info("Chess960: Game started with custom FEN")
-
-        # Chess960 Plugin edit by Chemtech1 - Ensure Chess960 FEN is sent to web interface for correct board display (handled by update_web_ui)
-
-        # Game started.
-        return True
+        Log.info(f"Chess960: Returning False from on_start_callback")
+        return False
 
      # When exists, this function is automatically invoked
      # when the plugin starts.
@@ -259,9 +439,7 @@ class Chess960(Plugin):
         print("BOT", font=fonts.DIGITAL_FONT, row=4)
         print("Push PLAY", row=8)
         print("to")
-        print("start")
-        print("the game!")
+        print("configure!")
 
         # The splash screen is activated.
-        return True
         return True

@@ -1,0 +1,34 @@
+[DEFAULT]
+Threads = 1
+WeightsFile = /opt/DGTCentaurMods/engines/maia_weights/maia-1100.pb.gz
+
+
+[E-1100]
+WeightsFile = /opt/DGTCentaurMods/engines/maia_weights/maia-1100.pb.gz
+
+[E-1200]
+WeightsFile = /opt/DGTCentaurMods/engines/maia_weights/maia-1200.pb.gz
+
+[E-1300]
+WeightsFile = /opt/DGTCentaurMods/engines/maia_weights/maia-1300.pb.gz
+
+[E-1400]
+WeightsFile = /opt/DGTCentaurMods/engines/maia_weights/maia-1400.pb.gz
+
+[E-1500]
+WeightsFile = /opt/DGTCentaurMods/engines/maia_weights/maia-1500.pb.gz
+
+[E-1600]
+WeightsFile = /opt/DGTCentaurMods/engines/maia_weights/maia-1600.pb.gz
+
+[E-1700]
+WeightsFile = /opt/DGTCentaurMods/engines/maia_weights/maia-1700.pb.gz
+
+[E-1800]
+WeightsFile = /opt/DGTCentaurMods/engines/maia_weights/maia-1800.pb.gz
+Threads = 2
+
+[E-1900]
+WeightsFile = /opt/DGTCentaurMods/engines/maia_weights/maia-1900.pb.gz
+Threads = 2
+
