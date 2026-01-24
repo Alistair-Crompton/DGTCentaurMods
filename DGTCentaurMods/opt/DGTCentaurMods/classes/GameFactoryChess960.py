@@ -859,7 +859,11 @@ class Engine():
             
             self.update_evaluation(force=True, text=str_outcome)
 
-            self.send_message_to_web_ui({ 
+            # Cancel any pending evaluation requests after game end to prevent analyse errors
+            self.cancel_evaluation()
+            self._new_evaluation_requested = False
+
+            self.send_message_to_web_ui({
                 "turn_caption":str_outcome
             })
 

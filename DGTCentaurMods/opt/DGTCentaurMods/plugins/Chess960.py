@@ -50,6 +50,10 @@ class Chess960(Plugin):
         self._selected_strength = None
         self._selected_color = chess.WHITE
 
+        # Menu display optimization
+        self._menu_initialized = False
+        self._prev_state = None
+
     def __event_callback(self, event:Enums.Event, outcome:Optional[chess.Outcome]):
         try:
             if self._started:
@@ -180,20 +184,37 @@ class Chess960(Plugin):
         return True
 
     def _update_menu_display(self):
-        """Update the screen to show current menu state"""
-        Centaur.clear_screen()
+        """Update the screen to show current menu state with partial updates"""
+        # Full clear and static elements only on state change or first call
+        if self._menu_state != self._prev_state or not self._menu_initialized:
+            Centaur.clear_screen()
 
+            # Print title based on state
+            if self._menu_state == "engine":
+                Centaur.print("Select Engine", row=1)
+            elif self._menu_state == "strength":
+                Centaur.print("Select Strength", row=1)
+            elif self._menu_state == "color":
+                Centaur.print("Select Color", row=1)
+
+            # Print static navigation instructions
+            Centaur.print("UP/DOWN: Navigate", row=8)
+            Centaur.print("PLAY: Select", row=9)
+            Centaur.print("BACK: Exit", row=10)
+
+            self._prev_state = self._menu_state
+            self._menu_initialized = True
+
+        # Always update dynamic content (item and counter)
         if self._menu_state == "engine":
-            Centaur.print("Select Engine", row=1)
             if self._engines:
-                engine_name = self._engines[self._current_index]['name']
+                engine_name = self._engines[self._current_index]['name'].ljust(11)
                 Centaur.print(f"{engine_name}", row=4, font=fonts.DIGITAL_FONT)
                 Centaur.print(f"{self._current_index + 1}/{len(self._engines)}", row=6)
             else:
                 Centaur.print("No engines found!", row=4)
 
         elif self._menu_state == "strength":
-            Centaur.print("Select Strength", row=1)
             if self._strengths:
                 strength = self._strengths[self._current_index]
                 Centaur.print(f"{strength}", row=4, font=fonts.DIGITAL_FONT)
@@ -202,15 +223,10 @@ class Chess960(Plugin):
                 Centaur.print("No strengths found!", row=4)
 
         elif self._menu_state == "color":
-            Centaur.print("Select Color", row=1)
             colors = ["White", "Black"]
             color_name = colors[self._current_index]
             Centaur.print(f"{color_name}", row=4, font=fonts.DIGITAL_FONT)
             Centaur.print(f"{self._current_index + 1}/{len(colors)}", row=6)
-
-        Centaur.print("UP/DOWN: Navigate", row=8)
-        Centaur.print("PLAY: Select", row=9)
-        Centaur.print("BACK: Exit", row=10)
 
     def _handle_menu_navigation(self, key:Enums.Btn) -> bool:
         """Handle menu navigation keys"""
@@ -303,7 +319,6 @@ class Chess960(Plugin):
                 for key, value in parser.items(self._selected_strength):
                     config[key] = value
 
-        config["Threads"] = 1
         Centaur.configure_main_chess_engine(config)
 
         Log.info(f"Chess960: Engine configured: {engine_name} with {self._selected_strength}")
