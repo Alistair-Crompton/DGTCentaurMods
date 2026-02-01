@@ -23,11 +23,12 @@
 
 # Chess960 Plugin edit by Chemtech1 - New Chess960 bot plugin that generates random Chess960 positions and plays with Stockfish engine
 
-import chess, random, os, configparser
+import chess, random, os, configparser, subprocess, time, select
 from pathlib import Path
 
 from DGTCentaurMods.classes.Plugin import Plugin, Centaur
 from DGTCentaurMods.classes import Log, ChessEngine
+from DGTCentaurMods.classes.GameFactoryChess960 import Engine
 from DGTCentaurMods.consts import Enums, fonts, consts
 
 from typing import Optional
@@ -117,11 +118,11 @@ class Chess960(Plugin):
 
     def _scan_frc_engines(self):
         """Find engines that support UCI_Chess960"""
-        engines_dir = consts.ENGINES_CHESS960_DIRECTORY
+        engines_dir = consts.ENGINES_DIRECTORY
         self._engines = []
 
         if not os.path.exists(engines_dir):
-            Log.error(f"Chess960: Engines directory not found: {engines_dir}")
+            Log.info(f"Chess960: Engines directory not found: {engines_dir}")
             return
 
         for f in os.scandir(engines_dir):
@@ -141,7 +142,7 @@ class Chess960(Plugin):
                     Log.debug(f"Chess960: Skipping invalid engine {f.name}: {e}")
 
         if not self._engines:
-            Log.error("Chess960: No FRC engines found!")
+            Log.info("Chess960: No FRC engines found!")
         else:
             Log.info(f"Chess960: Found {len(self._engines)} FRC engines")
 
@@ -150,15 +151,94 @@ class Chess960(Plugin):
         parser = configparser.ConfigParser()
         parser.read(uci_path)
 
-        self._strengths = []
-        for section in parser.sections():
-            if section.startswith('E-') or section.startswith('DEFAULT'):
-                self._strengths.append(section)
+        self._strengths = list(parser.sections())
 
         # Sort by ELO rating (DEFAULT first, then E-XXXX)
         self._strengths.sort(key=lambda x: int(x[2:]) if x.startswith('E-') else 0)
 
         Log.info(f"Chess960: Loaded {len(self._strengths)} strength levels")
+
+    def check_chess960_support(self, engine_binary: str) -> bool:
+        try:
+            Log.info(f"Starting Chess960 support test for {Path(engine_binary).stem}")
+            proc = subprocess.Popen(
+                [engine_binary],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                bufsize=1
+            )
+
+            def send(cmd):
+                Log.info(f"Sending UCI command: {cmd}")
+                proc.stdin.write(cmd + "\n")
+                proc.stdin.flush()
+
+            Log.info("Sending 'uci' command")
+            send("uci")
+            uci_response = self._read_until(proc, "uciok", 5)
+            Log.info(f"UCI response: {uci_response.strip()}")
+
+            Log.info("Setting UCI_Chess960 to true")
+            send("setoption name UCI_Chess960 value true")
+            send("isready")
+            ready_response = self._read_until(proc, "readyok", 5)
+            Log.info(f"Ready response: {ready_response.strip()}")
+
+            Log.info("Setting position")
+            send("position fen rk6/ppp1pppp/8/8/8/8/PPP1PPPP/2RKR3 b kq - 1 1")
+            Log.info("Starting analysis with go movetime 500")
+            send("go movetime 500")  # 0.5 s reicht völlig
+
+            output = self._read_until(proc, "bestmove", 2)
+            Log.info(f"Analysis output: {output.strip()}")
+
+            Log.info("Terminating engine process")
+            proc.terminate()
+            proc.wait(timeout=2)
+
+            if "bestmove b8a8" in output:
+                Log.info("Bestmove b8a8 erkannt → PASS")
+                result = True
+            elif "pv b8a8" in output:
+                Log.info("PV b8a8 erkannt → PASS")
+                result = True
+            else:
+                result = False
+            Log.info(f"Chess960 support test result: {'PASS' if result else 'FAIL'}")
+            return result
+
+        except Exception as e:
+            Log.info(f"Chess960 support test exception: {e}")
+            return False
+
+    def _read_until(self, proc, keyword: str, timeout: float) -> str:
+        output = ""
+        start = time.time()
+        while time.time() - start < timeout:
+            ready, _, _ = select.select([proc.stdout, proc.stderr], [], [], 0.2)
+            if ready:
+                if proc.stdout in ready:
+                    line = proc.stdout.readline()
+                    if line:
+                        Log.info(f"Gelesen stdout: {line.strip()}")
+                        output += line
+                        if keyword in output:
+                            break
+                if proc.stderr in ready:
+                    line = proc.stderr.readline()
+                    if line:
+                        Log.info(f"Gelesen stderr: {line.strip()}")
+                        output += line
+                        if keyword in output:
+                            break
+            if proc.poll() is not None:
+                break
+        Log.info(f"Vollständige Antwort: {output.strip()}")
+        return output
 
     # This function is automatically invoked when
     # the user launches the plugin.
@@ -209,7 +289,7 @@ class Chess960(Plugin):
         if self._menu_state == "engine":
             if self._engines:
                 engine_name = self._engines[self._current_index]['name'].ljust(11)
-                Centaur.print(f"{engine_name}", row=4, font=fonts.DIGITAL_FONT)
+                Centaur.print(f"{engine_name}", row=4, font=fonts.MAIN_FONT)
                 Centaur.print(f"{self._current_index + 1}/{len(self._engines)}", row=6)
             else:
                 Centaur.print("No engines found!", row=4)
@@ -270,14 +350,24 @@ class Chess960(Plugin):
 
         if self._menu_state == "engine":
             if self._engines:
-                self._selected_engine = self._engines[self._current_index]
-                Log.info(f"Chess960: Selected engine: {self._selected_engine['name']}")
-                self._load_engine_strengths(self._selected_engine['uci_path'])
-                self._menu_state = "strength"
-                self._current_index = 0
-                self._update_menu_display()
+                engine = self._engines[self._current_index]
+                Log.info(f"Chess960: Checking {engine['name']} for Chess960 support")
+                Centaur.print("Testing engine...", row=4)
+                if self.check_chess960_support(engine['binary_path']):
+                    self._selected_engine = engine
+                    Log.info(f"Chess960: Selected engine: {self._selected_engine['name']}")
+                    self._load_engine_strengths(self._selected_engine['uci_path'])
+                    self._menu_state = "strength"
+                    self._current_index = 0
+                    self._update_menu_display()
+                else:
+                    Centaur.print("Engine not ready", row=4, font=fonts.DIGITAL_FONT)
+                    time.sleep(2)
+                    Centaur.clear_screen()
+                    self._menu_initialized = False
+                    self._update_menu_display()
             else:
-                Log.error("Chess960: No engines available for selection")
+                Log.info("Chess960: No engines available for selection")
 
         elif self._menu_state == "strength":
             if self._strengths:
@@ -287,7 +377,7 @@ class Chess960(Plugin):
                 self._current_index = 0
                 self._update_menu_display()
             else:
-                Log.error("Chess960: No strengths available for selection")
+                Log.info("Chess960: No strengths available for selection")
 
         elif self._menu_state == "color":
             self._selected_color = chess.WHITE if self._current_index == 0 else chess.BLACK
@@ -423,7 +513,7 @@ class Chess960(Plugin):
             Log.info(f"DEBUG Chess960 Engine UCI: '{uci_move}' (promo={len(uci_move)>4})")
             Centaur.play_computer_move(uci_move)
         else:
-            Log.error("Chess960: Engine error - no move available")
+            Log.info("Chess960: Engine error - no move available")
             Centaur.send_bot_response("Engine error - no move available")
 
      # When exists, this function is automatically invoked
