@@ -495,6 +495,9 @@ class Chess960(Plugin):
         except ValueError:
             pass  # Invalid, ignore
 
+        # Auto-advance cursor to next position (0->1->2->0)
+        self._cursor_pos = (self._cursor_pos + 1) % 3
+
         self._update_pos_display()
         Log.info(f"Pos updated: {''.join(self._input_str)}, cursor={self._cursor_pos}")
 
