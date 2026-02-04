@@ -26,8 +26,10 @@
 import chess, random, os, configparser, subprocess, time, select
 from pathlib import Path
 
+from PIL import ImageDraw
+
 from DGTCentaurMods.classes.Plugin import Plugin, Centaur
-from DGTCentaurMods.classes import Log, ChessEngine
+from DGTCentaurMods.classes import Log, ChessEngine, CentaurBoard, CentaurScreen
 from DGTCentaurMods.classes.GameFactoryChess960 import Engine
 from DGTCentaurMods.consts import Enums, fonts, consts
 
@@ -51,9 +53,21 @@ class Chess960(Plugin):
         self._selected_strength = None
         self._selected_color = chess.WHITE
 
+        # Centaur board instance
+        self._centaur_board = CentaurBoard.get()
+        self._centaur_screen = CentaurScreen.get()
+
+        # Position input state
+        self._input_str = []  # List for editable digits ['1','2','3']
+        self._cursor_pos = 0  # 0=hundreds, 1=tens, 2=ones
+        self._ziffer_map = {32:'1',33:'2',34:'3',35:'4',36:'5',37:'6',38:'7',39:'8',27:'9',28:'0'}
+
         # Menu display optimization
         self._menu_initialized = False
         self._prev_state = None
+        self._prev_cursor_pos = None
+
+        # No BACK navigation saves - BACK just goes back one level with defaults
 
     def __event_callback(self, event:Enums.Event, outcome:Optional[chess.Outcome]):
         try:
@@ -97,11 +111,13 @@ class Chess960(Plugin):
     def __key_callback(self, key:Enums.Btn):
         try:
             if key == Enums.Btn.BACK:
-                if self._game_engine:
-                    self._game_engine.end()
-                else:
-                    self.stop()
-                return True
+                if self._menu_state is None:  # Only stop if not in menu
+                    if self._game_engine:
+                        self._game_engine.end()
+                    else:
+                        self.stop()
+                    return True
+                # Else, let menu handle BACK
 
             if not self._started:
                 self._started = self.on_start_callback(key)
@@ -297,7 +313,7 @@ class Chess960(Plugin):
         elif self._menu_state == "strength":
             if self._strengths:
                 strength = self._strengths[self._current_index]
-                Centaur.print(f"{strength}", row=4, font=fonts.DIGITAL_FONT)
+                Centaur.print(f"{strength}", row=4, font=fonts.MAIN_FONT)
                 Centaur.print(f"{self._current_index + 1}/{len(self._strengths)}", row=6)
             else:
                 Centaur.print("No strengths found!", row=4)
@@ -340,6 +356,24 @@ class Chess960(Plugin):
             Log.info(f"Chess960: PLAY pressed, calling _handle_menu_selection")
             self._handle_menu_selection()
             return True
+        elif key == Enums.Btn.BACK:
+            if self._menu_state == "strength":
+                self._menu_state = "engine"
+                self._current_index = 0  # Start from first engine
+                self._update_menu_display()
+                return True
+            elif self._menu_state == "color":
+                self._menu_state = "position"
+                self._chess960_pos = random.randint(0, 959)  # New random position
+                self._input_str = list(str(self._chess960_pos).zfill(3))
+                self._cursor_pos = 0
+                self._centaur_board.subscribe_events(self._position_key_callback, self._position_field_callback)
+                self._update_pos_display()
+                return True
+            else:
+                # For engine or other, stop plugin
+                self.stop()
+                return True
 
         Log.info(f"Chess960: Key {key} not handled in menu navigation")
         return False
@@ -373,9 +407,14 @@ class Chess960(Plugin):
             if self._strengths:
                 self._selected_strength = self._strengths[self._current_index]
                 Log.info(f"Chess960: Selected strength: {self._selected_strength}")
-                self._menu_state = "color"
-                self._current_index = 0
-                self._update_menu_display()
+                self._menu_state = "position"
+                self._chess960_pos = random.randint(0, 959)
+                self._input_str = list(str(self._chess960_pos).zfill(3))
+                self._cursor_pos = 0
+                Centaur.clear_screen()
+                self._menu_initialized = False
+                self._centaur_board.subscribe_events(self._position_key_callback, self._position_field_callback)
+                self._update_pos_display()
             else:
                 Log.info("Chess960: No strengths available for selection")
 
@@ -386,14 +425,132 @@ class Chess960(Plugin):
             Log.info(f"Chess960: Starting game...")
             self._start_selected_game()
 
+    def _get_keyboard_array(self):
+        keyboard = [' '] * 64
+        # Zeile 5 h5-a5 reversed: '87654321' (visual 12345678 left to right)
+        keyboard[24:32] = list('87654321')
+        # Zeile 4 d4: '0'
+        keyboard[35] = '0'
+        # e4: '9'
+        keyboard[36] = '9'
+        return keyboard
+
+    def _update_pos_display(self):
+        # Titel
+        Centaur.print("starting position", row=1, font=fonts.MAIN_FONT)
+
+        # Brett mit Zahlen zeichnen
+        self._centaur_screen.draw_board(self._get_keyboard_array(), 1.75, is_keyboard=True)
+
+        # Dreistellige Zahl - separate draws mit x-Offset (nach clear, um Overlaps zu vermeiden)
+        pos_str = ''.join(self._input_str)
+        x_digits = [10, 45, 80]  # Hunderter +5px rechts, Zehner, Einer -5px links  # Vor clear definieren!
+        y_pos = 200  # row=10 * HEADER_HEIGHT
+
+        # Clear digit area to avoid overlap
+        draw = ImageDraw.Draw(self._centaur_screen._buffer)
+        draw.rectangle((0, 195, 100, 235), fill=255)
+
+        # Clear alten Rahmen falls Cursor gewechselt
+        if self._prev_cursor_pos is not None and self._prev_cursor_pos != self._cursor_pos:
+            old_x_start = x_digits[self._prev_cursor_pos] - 10
+            self._centaur_screen.draw_rectangle(old_x_start, 197, old_x_start + 40, 232, fill=255)
+        font = fonts.DIGITAL_FONT
+        for i in range(3):
+            draw.text((x_digits[i], y_pos), pos_str[i], font=font, fill=0)
+
+        # Highlight selected Ziffer mit Rahmen - zentriert auf Ziffer, 2px tiefer
+        frame_width = 40
+        digit_center_offset = 10  # (frame_width - digit_width) // 2, digit_width~20px
+        x_start = x_digits[self._cursor_pos] - digit_center_offset
+        y_top = 197  # 2px tiefer
+        y_bottom = 232  # 2px tiefer, Höhe=35px
+        self._centaur_screen.draw_rectangle(x_start, y_top, x_start + frame_width, y_bottom, outline=0)
+
+        # Anleitung
+        Centaur.print("UP/DN:Cursor", row=12, font=fonts.MEDIUM_MAIN_FONT)
+        Centaur.print("PLAY:start", row=13, font=fonts.MEDIUM_MAIN_FONT)
+        Centaur.print("BACK:Prev", row=14, font=fonts.MEDIUM_MAIN_FONT)
+
+        self._prev_cursor_pos = self._cursor_pos
+
+    def _position_field_callback(self, field_index, action):
+        Log.info(f"PLACE on field {field_index}, action {action}")
+        if action != Enums.PieceAction.PLACE or field_index not in self._ziffer_map:
+            Log.info(f"Ignored: action={action}, field in map={field_index in self._ziffer_map}")
+            return
+        ziffer = self._ziffer_map[field_index]
+        Log.info(f"Setting ziffer {ziffer} at cursor {self._cursor_pos}")
+        self._input_str[self._cursor_pos] = ziffer
+        Centaur.sound(Enums.Sound.CORRECT_MOVE)
+
+        # Validate position: if >959, reset tens to 0 and move cursor there
+        pos_str = ''.join(self._input_str)
+        try:
+            pos = int(pos_str)
+            if pos > 959:
+                self._input_str[1] = '0'  # Reset tens
+                self._cursor_pos = 1  # Move to tens
+                Centaur.sound(Enums.Sound.CORRECT_MOVE)  # Indicate correction
+        except ValueError:
+            pass  # Invalid, ignore
+
+        self._update_pos_display()
+        Log.info(f"Pos updated: {''.join(self._input_str)}, cursor={self._cursor_pos}")
+
+    def _position_key_callback(self, key):
+        if key == Enums.Btn.PLAY:
+            pos_str = ''.join(self._input_str)
+            while len(pos_str) < 3:
+                pos_str += '0'  # Pad with 0
+            try:
+                pos = int(pos_str)
+                if 0 <= pos <= 959:
+                    board = chess.Board.from_chess960_pos(pos)
+                    self._chess960_fen = board.fen()
+                    self._centaur_board.unsubscribe_events()
+                    self._menu_state = "color"
+                    self._current_index = 0
+                    self._update_menu_display()
+                    Log.info(f"Pos {pos} confirmed, FEN: {self._chess960_fen}")
+                else:
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Centaur.print("Invalid 0-959!", row=6)
+                    time.sleep(2)
+                    self._update_pos_display()
+            except ValueError:
+                Centaur.sound(Enums.Sound.WRONG_MOVE)
+                Centaur.print("Invalid digits!", row=6)
+                time.sleep(2)
+                self._update_pos_display()
+            return True
+        elif key == Enums.Btn.UP:
+            self._cursor_pos = (self._cursor_pos - 1) % 3
+            self._update_pos_display()
+            return True
+        elif key == Enums.Btn.DOWN:
+            self._cursor_pos = (self._cursor_pos + 1) % 3
+            self._update_pos_display()
+            return True
+        elif key == Enums.Btn.BACK:
+            self._centaur_board.unsubscribe_events()
+            self._menu_state = "strength"
+            self._current_index = 0  # Start from first strength
+            self._update_menu_display()
+            return True
+        return False
+
     def _start_selected_game(self):
         """Start the game with selected parameters"""
-        # Generate random Chess960 position
-        chess960_pos = random.randint(0, 959)
-        board = chess.Board.from_chess960_pos(chess960_pos)
-        self._chess960_fen = board.fen()
+        # Use selected position if available, else random
+        if not hasattr(self, '_chess960_fen') or not self._chess960_fen:
+            chess960_pos = random.randint(0, 959)
+            board = chess.Board.from_chess960_pos(chess960_pos)
+            self._chess960_fen = board.fen()
+            Log.info(f"Chess960: Generated random position {chess960_pos}")
+        else:
+            Log.info(f"Chess960: Using selected position")
 
-        Log.info(f"Chess960: Generated position {chess960_pos}")
         Log.info(f"Chess960: FEN: {self._chess960_fen}")
 
         # Set up selected engine
@@ -439,6 +596,10 @@ class Chess960(Plugin):
     # Except the BACK key which is handled by the engine.
     def key_callback(self, key:Enums.Btn):
         Log.info(f"Chess960: key_callback called with key={key}, menu_state={self._menu_state}")
+
+        # Handle position input if in position state
+        if self._menu_state == "position":
+            return self._position_key_callback(key)
 
         # Handle menu navigation if we're still in menu mode
         if self._menu_state is not None:
