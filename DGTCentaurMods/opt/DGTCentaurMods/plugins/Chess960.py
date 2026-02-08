@@ -265,7 +265,15 @@ class Chess960(Plugin):
     # This function is automatically invoked when
     # the user stops the plugin.
     def stop(self):
-        # Back to the main menu.
+        # Reset to standard starting position for board and web
+        standard_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        Log.info(f"Chess960: Stop called, FEN before reset: {self._game_engine._chessboard.fen() if self._game_engine else 'No engine'}")
+        if self._game_engine:
+            self._game_engine._chessboard.set_fen(standard_fen)
+            Log.info(f"Chess960: FEN after set_fen: {self._game_engine._chessboard.fen()}")
+            self._game_engine.display_board()  # Update physical board
+        Log.info(f"Chess960: FEN before super.stop(): {self._game_engine._chessboard.fen() if self._game_engine else 'No engine'}")
+        # Auto-send standard FEN (post 518) via super
         super().stop()
 
     # When exists, this function is automatically invoked
@@ -627,6 +635,7 @@ class Chess960(Plugin):
         # If the user chooses to leave,
         # we quit the plugin.
         if event == Enums.Event.QUIT:
+            Log.info(f"Chess960: QUIT event, current FEN: {self._game_engine._chessboard.fen() if self._game_engine else 'No engine'}")
             self.stop()
 
         if event == Enums.Event.TERMINATION:

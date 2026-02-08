@@ -184,12 +184,12 @@ class PieceHandler:
                 CENTAUR_BOARD.led(self._place1)
 
             self._update_display()
-            self._engine.update_web_ui({
-                "clear_board_graphic_moves": True,
-                "uci_move": uci_move,
-                "san_move": san_move,
-                "field_index": self._place1
-            })
+# self._engine.update_web_ui({
+#     "clear_board_graphic_moves": True,
+#     "uci_move": uci_move,
+#     "san_move": san_move,
+#     "field_index": self._place1
+# })
             self._last_move_was_castling = self.was_last_move_castling()
             self._engine._check_last_move_outcome_and_switch()
         else:
@@ -361,14 +361,14 @@ class PieceHandler:
             Log.info("Takeback completed without LED guidance")
 
         self._update_display()
-        self._engine.update_web_ui({
-            "clear_board_graphic_moves": True,
-            "uci_undo_move": previous_uci_move,
-            "uci_move": None,
-            "takeback_in_progress": show_leds,
-            "takeback_from": common.Converters.to_square_name(from_square),
-            "takeback_to": common.Converters.to_square_name(to_square),
-        })
+#         self._engine.update_web_ui({
+#             "clear_board_graphic_moves": True,
+#             "uci_undo_move": previous_uci_move,
+#             "uci_move": None,
+#             "takeback_in_progress": show_leds,
+#             "takeback_from": common.Converters.to_square_name(from_square),
+#             "takeback_to": common.Converters.to_square_name(to_square),
+#         })
 
         Engine._Engine__invoke_callback(
             self._engine._undo_callback_function,
@@ -627,17 +627,17 @@ class Engine():
 
             if "pgn" in data:
                 response["pgn"] = self.get_current_pgn()
-                socket.send_web_message(response)
+                # socket.send_web_message(response)
                 del data["pgn"]
 
             if "fen" in data:
                 response["fen"] = self._chessboard.fen()
-                socket.send_web_message(response)
+                # socket.send_web_message(response)
                 del data["fen"]
 
             if "uci_move" in data:
                 response["uci_move"] = self.last_uci_move
-                socket.send_web_message(response)
+                # socket.send_web_message(response)
                 del data["uci_move"]
 
             if "web_menu" in data:
@@ -794,10 +794,10 @@ class Engine():
 
                             Log.info(f"Highlighting from {common.Converters.to_square_name(from_num)} to {common.Converters.to_square_name(to_num)}")
 
-                            self.send_message_to_web_ui({
-                                "clear_board_graphic_moves":False,
-                                "uci_move":previous_uci_move,
-                            })
+#                             self.send_message_to_web_ui({
+#                                 "clear_board_graphic_moves":False,
+#                                 "uci_move":previous_uci_move,
+#                             })
 
                             self._previous_move_displayed = True
                         else:
@@ -863,9 +863,9 @@ class Engine():
             self.cancel_evaluation()
             self._new_evaluation_requested = False
 
-            self.send_message_to_web_ui({
-                "turn_caption":str_outcome
-            })
+#             self.send_message_to_web_ui({
+#                 "turn_caption":str_outcome
+#             })
 
             Engine.__invoke_callback(self._event_callback_function, event=Enums.Event.TERMINATION, outcome=outcome)
 
@@ -974,9 +974,9 @@ class Engine():
                                 self.display_board()
                                 self.display_partial_PGN()
 
-                                self.update_web_ui({ 
-                                    "clear_board_graphic_moves":True,
-                                    "uci_move":last_uci_move })
+#                                 self.update_web_ui({
+#                                     "clear_board_graphic_moves":True,
+#                                     "uci_move":last_uci_move })
 
                                 Engine.__invoke_callback(self._event_callback_function, event=Enums.Event.RESUME_GAME, outcome=None)
                                 
@@ -1012,9 +1012,9 @@ class Engine():
 
                     self.display_board()
                     self.display_partial_PGN()
-                    self.update_web_ui({
-                        "clear_board_graphic_moves":True
-                    })
+#                     self.update_web_ui({
+#                         "clear_board_graphic_moves":True
+#                     })
 
                     # Log a new game in the db
                     self._dal.insert_new_game(
@@ -1091,7 +1091,7 @@ class Engine():
         Engine.__invoke_callback(self._event_callback_function, event=Enums.Event.QUIT, outcome=None)
 
     def stop(self):
-        
+
         if not self._started:
             return
 
@@ -1109,7 +1109,7 @@ class Engine():
             self._evaluation_thread_instance.join()
         except:
             pass
-        
+
         if self._chess_engine:
             self._chess_engine.quit()
 
@@ -1117,7 +1117,10 @@ class Engine():
 
         LiveScript.detach_game_engine()
 
-        Log.info(f"{Engine.__name__} thread has been stopped.")
+        # Send final FEN to web on stop
+        fen = self._chessboard.fen()
+        common.update_Centaur_FEN(fen)
+        Log.info(f"{Engine.__name__} thread has been stopped, sent final FEN: {fen}")
 
     def cancel_evaluation(self):
 
@@ -1164,9 +1167,9 @@ class Engine():
 
                 Log.info(f'Engine help requested :"{uci_hint_move}"')
 
-                self.send_message_to_web_ui({ 
-                    "tip_uci_move":uci_hint_move
-                })
+#                 self.send_message_to_web_ui({
+#                     "tip_uci_move":uci_hint_move
+#                 })
 
                 if uci_hint_move!= None:
                     from_num = common.Converters.to_square_index(uci_hint_move, Enums.SquareType.ORIGIN)
@@ -1393,10 +1396,10 @@ class Engine():
             # Then light it up!
             CENTAUR_BOARD.led_from_to(from_num,to_num)
 
-            self.send_message_to_web_ui({ 
-                "clear_board_graphic_moves":False,
-                "computer_uci_move":uci_move,
-            })
+#             self.send_message_to_web_ui({
+#                 "clear_board_graphic_moves":False,
+#                 "computer_uci_move":uci_move,
+#             })
 
             return True
  
