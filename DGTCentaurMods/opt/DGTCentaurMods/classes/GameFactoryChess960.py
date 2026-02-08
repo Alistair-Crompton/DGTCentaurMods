@@ -1101,12 +1101,12 @@ class Engine():
         SOCKET.disconnect()
 
         try:
-            self._game_thread_instance.join()
+            self._game_thread_instance.join(timeout=0.1)
         except:
             pass
 
         try:
-            self._evaluation_thread_instance.join()
+            self._evaluation_thread_instance.join(timeout=0.1)
         except:
             pass
 
