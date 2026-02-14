@@ -31,7 +31,6 @@ from threading import Thread
 
 import time
 import chess
-import chess.pgn
 import sys
 import inspect
 

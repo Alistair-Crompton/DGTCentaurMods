@@ -73,16 +73,16 @@ class Chess960(Plugin):
         try:
             if self._started:
                 self.event_callback(event, outcome)
-        except:
-            SOCKET.send_web_message({ "script_output":Log.last_exception() })
+        except Exception as e:
+            Log.error(f"Exception in event_callback: {str(e)}")
             self.stop()
 
     def __move_callback(self, uci_move:str, san_move:str, color:chess.Color, field_index:chess.Square):
         try:
             if self._started:
                 return self.move_callback(uci_move, san_move, color, field_index)
-        except:
-            SOCKET.send_web_message({ "script_output":Log.last_exception() })
+        except Exception as e:
+            Log.error(f"Exception in move_callback: {str(e)}")
             self.stop()
         return False
 
@@ -90,8 +90,8 @@ class Chess960(Plugin):
         try:
             if self._started:
                 return self.undo_callback(uci_move, san_move, field_index)
-        except:
-            SOCKET.send_web_message({ "script_output":Log.last_exception() })
+        except Exception as e:
+            Log.error(f"Exception in undo_callback: {str(e)}")
             self.stop()
         return False
 
@@ -103,8 +103,8 @@ class Chess960(Plugin):
                     return True
                 if self._started:
                     return self.on_socket_request(data)
-        except:
-            SOCKET.send_web_message({ "script_output":Log.last_exception() })
+        except Exception as e:
+            Log.error(f"Exception in socket_callback: {str(e)}")
             self.stop()
         return False
 
@@ -128,8 +128,8 @@ class Chess960(Plugin):
                 return False
 
             return self.key_callback(key)
-        except:
-            SOCKET.send_web_message({ "script_output":Log.last_exception() })
+        except Exception as e:
+            Log.error(f"Exception in key_callback: {str(e)}")
             self.stop()
 
     def _scan_frc_engines(self):
@@ -403,8 +403,10 @@ class Chess960(Plugin):
                     self._current_index = 0
                     self._update_menu_display()
                 else:
-                    Centaur.print("Engine not ready", row=4, font=fonts.DIGITAL_FONT)
-                    time.sleep(2)
+                    Centaur.print("The engine cannot", row=4, font=fonts.DIGITAL_FONT)
+                    Centaur.print("play Chess960", row=5, font=fonts.DIGITAL_FONT)
+                    Centaur.print("          ", row=6)
+                    time.sleep(3)
                     Centaur.clear_screen()
                     self._menu_initialized = False
                     self._update_menu_display()
@@ -476,9 +478,9 @@ class Chess960(Plugin):
         self._centaur_screen.draw_rectangle(x_start, y_top, x_start + frame_width, y_bottom, outline=0)
 
         # Anleitung
-        Centaur.print("UP/DN:Cursor", row=12, font=fonts.MEDIUM_MAIN_FONT)
-        Centaur.print("PLAY:start", row=13, font=fonts.MEDIUM_MAIN_FONT)
-        Centaur.print("BACK:Prev", row=14, font=fonts.MEDIUM_MAIN_FONT)
+        Centaur.print("UP/DOWN: Navigate", row=12, font=fonts.MAIN_FONT)
+        Centaur.print("PLAY: Select", row=13, font=fonts.MAIN_FONT)
+        Centaur.print("BACK: Exit", row=14, font=fonts.MAIN_FONT)
 
         self._prev_cursor_pos = self._cursor_pos
 
