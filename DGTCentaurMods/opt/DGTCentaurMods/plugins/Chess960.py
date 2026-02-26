@@ -23,7 +23,7 @@
 
 # Chess960 Plugin edit by Chemtech1 - New Chess960 bot plugin that generates random Chess960 positions and plays with Stockfish engine
 
-import chess, random, os, configparser, subprocess, time, select
+import chess, random, os, configparser, subprocess, time, select, threading
 from pathlib import Path
 
 from PIL import ImageDraw
@@ -68,6 +68,26 @@ class Chess960(Plugin):
         self._prev_cursor_pos = None
 
         # No BACK navigation saves - BACK just goes back one level with defaults
+
+        # Tutorial state
+        self._tutorial_active = False
+        self._tutorial_state = None          # 'setup' | 'queenside_...' | 'kingside_...' | 'complete'
+        self._tutorial_blink_fields = []     # Fields currently blinking
+        self._tutorial_stop_blink = False    # Stop flag for blink thread
+        self._tutorial_blink_thread = None   # Reference to blink daemon thread
+        self._tutorial_placed_fields = set() # Which target fields (1,5,6) have pieces placed
+        self._tutorial_qs_placed = set()     # Queenside place_pieces: tracks c1(2) and d1(3)
+
+        # Tutorial FENs (nur für Referenz, nicht mehr für display)
+        self._tutorial_fen = "8/8/8/8/8/8/8/1R3KR1 w - - 0 1"  # Setup: Rb1, Kf1, Rg1
+        self._tutorial_fen_qs = "8/8/8/8/8/8/8/2KR2R1 w - - 0 1"  # After queenside: Kc1, Rd1, Rg1
+        self._tutorial_fen_ks = "8/8/8/8/8/8/8/1R3RK1 w - - 0 1"  # After kingside: Rb1, Rf1, Kg1
+        self._tutorial_ks_placed = set()     # Kingside place_pieces: tracks f1(5) and g1(6)
+        
+        # Tutorial board state: 64-char array for dynamic piece display
+        # Index 0=a1, 7=h1, 8=a2, ..., 63=h8
+        # Initial empty board, will be populated during setup
+        self._tutorial_board_array = [' '] * 64
 
     def __event_callback(self, event:Enums.Event, outcome:Optional[chess.Outcome]):
         try:
@@ -695,6 +715,13 @@ class Chess960(Plugin):
      # at start, after splash screen, on PLAY button.
     def on_start_callback(self, key:Enums.Btn) -> bool:
         Log.info(f"Chess960: on_start_callback called with key={key}")
+
+        # HELP key starts the castling tutorial
+        if key == Enums.Btn.HELP:
+            Log.info(f"Chess960: HELP pressed, starting tutorial")
+            self._start_tutorial()
+            return False  # Stay in pre-start mode (splash screen state)
+
         # Start the menu system
         if key == Enums.Btn.PLAY:
             Log.info(f"Chess960: Setting menu_state to 'engine'")
@@ -707,6 +734,589 @@ class Chess960(Plugin):
         Log.info(f"Chess960: Returning False from on_start_callback")
         return False
 
+    # -------------------------------------------------------------------------
+    # Tutorial methods
+    # -------------------------------------------------------------------------
+
+    def _tutorial_stop_blink_thread(self):
+        """Safely stop the LED blink thread and turn off all LEDs."""
+        if self._tutorial_blink_thread and self._tutorial_blink_thread.is_alive():
+            Log.info("Chess960: Stopping blink thread")
+            self._tutorial_stop_blink = True
+            self._tutorial_blink_thread.join(timeout=2.0)
+            self._tutorial_blink_thread = None
+        self._centaur_board.leds_off()
+        Log.info("Chess960: Blink thread stopped, LEDs off")
+
+    def _tutorial_blink_leds(self):
+        """Background thread: cycle through fields in _tutorial_blink_fields one at a time.
+        Pattern: one field 0.5 s on -> 0.1 s off -> next field -> ...
+        Only ONE LED at a time (DGT board limitation). Stops when _tutorial_stop_blink is True."""
+        Log.info(f"Chess960: Blink thread started for fields {self._tutorial_blink_fields}")
+        while not self._tutorial_stop_blink:
+            fields = list(self._tutorial_blink_fields)
+            if not fields:
+                time.sleep(0.1)
+                continue
+            for field in fields:
+                if self._tutorial_stop_blink:
+                    break
+                self._centaur_board.led_array([field], speed=3, intensity=5)
+                time.sleep(0.5)
+                if self._tutorial_stop_blink:
+                    break
+                self._centaur_board.leds_off()
+                time.sleep(0.1)
+        Log.info("Chess960: Blink thread exiting")
+
+    def _tutorial_start_blink(self, fields):
+        """Stop any running blink thread and start a new one for the given fields."""
+        self._tutorial_stop_blink_thread()
+        self._tutorial_blink_fields = list(fields)
+        self._tutorial_stop_blink = False
+        self._tutorial_blink_thread = threading.Thread(
+            target=self._tutorial_blink_leds, daemon=True)
+        self._tutorial_blink_thread.start()
+        Log.info(f"Chess960: Blink thread started for fields {fields}")
+
+    def _start_tutorial(self):
+        """Start the castling tutorial with intro screen explaining the trigger."""
+        Log.info("Chess960: Starting castling tutorial")
+        self._tutorial_active = True
+        self._tutorial_state = 'intro'  # Start with intro screen
+        
+        # Reset tracking sets for fresh start
+        self._tutorial_placed_fields = set()
+        self._tutorial_qs_placed = set()
+
+        # Subscribe tutorial-specific event callbacks
+        self._centaur_board.subscribe_events(
+            self._tutorial_key_callback,
+            self._tutorial_field_callback
+        )
+
+        # Draw the intro screen
+        self._tutorial_draw_intro_screen()
+        Log.info("Chess960: Tutorial intro screen displayed")
+
+    def _tutorial_draw_intro_screen(self):
+        """Draw intro screen explaining the castling trigger."""
+        Centaur.clear_screen()
+        self._centaur_screen.write_text(1.0, "CHESS960", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(3.0, "Castling:", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(4.0, "move is", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(5.0, "triggered", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(6.0, "by king's", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(7.0, "move to", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(8.0, "rook square", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(10.0, "PLAY: start", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(11.0, "BACK: exit", font=fonts.MAIN_FONT)
+
+    def _tutorial_start_setup(self):
+        """Start the setup phase after intro: show board and start LED blinking."""
+        Log.info("Chess960: Starting setup phase")
+        self._tutorial_state = 'setup'
+        
+        # Initialize board array with starting pieces
+        self._tutorial_board_array = [' '] * 64
+        self._tutorial_board_array[1] = 'R'   # b1 = Rook
+        self._tutorial_board_array[5] = 'K'   # f1 = King
+        self._tutorial_board_array[6] = 'R'   # g1 = Rook
+        
+        # Draw the setup screen
+        self._tutorial_draw_setup_screen()
+
+        # Start blinking target fields: b1=1, f1=5, g1=6
+        self._tutorial_start_blink([1, 5, 6])
+        Log.info("Chess960: Tutorial setup screen displayed, LEDs blinking")
+
+    def _tutorial_draw_setup_screen(self):
+        """Draw the tutorial setup screen: board on top, instructions below."""
+        Centaur.clear_screen()
+        # Draw board with tutorial FEN (Rook b1, King f1, Rook g1)
+        self._centaur_screen.draw_fen(self._tutorial_fen, startrow=1.6)
+        # Instruction text below the board - short lines to avoid auto font shrinking
+        self._centaur_screen.write_text(9.0, "Place pieces:", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(10.0, "Rook b1", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(11.0, "King f1", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(12.0, "Rook g1", font=fonts.MAIN_FONT)
+        self._centaur_screen.write_text(13.5, "BACK: exit", font=fonts.MAIN_FONT)
+
+    def _tutorial_key_callback(self, key:Enums.Btn):
+        """Handle key events during the tutorial."""
+        Log.info(f"Chess960: Tutorial key callback: key={key}, state={self._tutorial_state}")
+        
+        if key == Enums.Btn.BACK:
+            Log.info("Chess960: Tutorial exited via BACK")
+            self._tutorial_active = False
+            self._tutorial_state = None
+            # Stop blinking and turn off LEDs
+            self._tutorial_stop_blink_thread()
+            # Unsubscribe tutorial callbacks - restores original callbacks
+            self._centaur_board.unsubscribe_events()
+            # Return to splash screen
+            self.splash_screen()
+            return True
+        
+        elif key == Enums.Btn.PLAY and self._tutorial_state == 'intro':
+            # PLAY pressed on intro screen → start setup
+            Log.info("Chess960: PLAY pressed on intro, starting setup")
+            self._tutorial_start_setup()
+            return True
+        
+        return False
+
+    def _tutorial_field_callback(self, field_index, action):
+        """Handle field (piece lift/place) events during the tutorial."""
+        Log.info(f"Chess960: Tutorial field callback: field={field_index}, action={action}, state={self._tutorial_state}")
+        
+        # Setup phase: place Rook b1 (1), King f1 (5), Rook g1 (6)
+        if self._tutorial_state == 'setup':
+            target_fields = {1, 5, 6}  # b1, f1, g1
+            
+            if action == Enums.PieceAction.PLACE:
+                if field_index in target_fields:
+                    # Correct field!
+                    Centaur.sound(Enums.Sound.CORRECT_MOVE)
+                    self._tutorial_placed_fields.add(field_index)
+                    Log.info(f"Chess960: Piece placed on correct field {field_index}, placed={self._tutorial_placed_fields}")
+                    
+                    # Remove from blink list
+                    remaining = target_fields - self._tutorial_placed_fields
+                    if remaining:
+                        self._tutorial_start_blink(list(remaining))
+                    else:
+                        # All 3 pieces placed!
+                        self._tutorial_stop_blink_thread()
+                    
+                    # Check if all 3 are placed
+                    if len(self._tutorial_placed_fields) == 3:
+                        Log.info("Chess960: All pieces placed, setup complete!")
+                        # Use timer to avoid blocking the event thread
+                        threading.Timer(0.5, self._tutorial_setup_complete).start()
+                else:
+                    # Wrong field
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Log.info(f"Chess960: Piece placed on wrong field {field_index}")
+            
+            elif action == Enums.PieceAction.LIFT:
+                if field_index in target_fields and field_index in self._tutorial_placed_fields:
+                    # Piece removed from correct field
+                    self._tutorial_placed_fields.remove(field_index)
+                    Log.info(f"Chess960: Piece lifted from {field_index}, placed={self._tutorial_placed_fields}")
+                    
+                    # Add back to blink list
+                    remaining = target_fields - self._tutorial_placed_fields
+                    if remaining:
+                        self._tutorial_start_blink(list(remaining))
+        
+        # Queenside castling states
+        elif self._tutorial_state == 'queenside_lift_rook':
+            if action == Enums.PieceAction.LIFT:
+                if field_index == 1:  # b1
+                    # Correct: rook lifted from b1
+                    Centaur.sound(Enums.Sound.CORRECT_MOVE)
+                    self._tutorial_update_piece(1, ' ')  # Remove rook from board
+                    self._tutorial_stop_blink_thread()
+                    Log.info("Chess960: Rook lifted from b1, state → queenside_lift_king")
+                    self._tutorial_state = 'queenside_lift_king'
+                    # New screen: lift king from f1 (text only, board stays!)
+                    self._tutorial_update_text_only(
+                        (9.0, "Good!"),
+                        (10.5, "Now lift"),
+                        (11.5, "King from"),
+                        (12.5, "f1")
+                    )
+                    self._tutorial_start_blink([5])  # f1
+                else:
+                    # Wrong piece lifted
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Log.info(f"Chess960: Wrong lift {field_index}, expected b1(1)")
+        
+        elif self._tutorial_state == 'queenside_lift_king':
+            if action == Enums.PieceAction.LIFT:
+                if field_index == 5:  # f1
+                    # Correct: king lifted from f1
+                    Centaur.sound(Enums.Sound.CORRECT_MOVE)
+                    self._tutorial_update_piece(5, ' ')  # Remove king from board
+                    self._tutorial_update_piece(1, 'K')  # Show target: b1 = King (like in real game!)
+                    self._tutorial_stop_blink_thread()
+                    Log.info("Chess960: King lifted from f1, state → queenside_place_king")
+                    self._tutorial_state = 'queenside_place_king'
+                    # New screen: place king on b1 (text only, board stays!)
+                    self._tutorial_update_text_only(
+                        (9.0, "Perfect!"),
+                        (10.5, "Place King"),
+                        (11.5, "on b1")
+                    )
+                    self._tutorial_start_blink([1])  # b1
+                else:
+                    # Wrong piece lifted
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Log.info(f"Chess960: Wrong lift {field_index}, expected f1(5)")
+        
+        elif self._tutorial_state == 'queenside_place_king':
+            if action == Enums.PieceAction.PLACE:
+                if field_index == 1:  # b1
+                    # Correct: king placed on b1 → queenside castling done, show target positions
+                    Centaur.sound(Enums.Sound.CORRECT_MOVE)
+                    self._tutorial_stop_blink_thread()
+                    Log.info("Chess960: King placed on b1, state → queenside_place_pieces")
+                    self._tutorial_state = 'queenside_place_pieces'
+                    self._tutorial_qs_placed.clear()  # Reset tracking
+                    # Set array with target positions already shown (like in real game!)
+                    self._tutorial_board_array = [' '] * 64
+                    self._tutorial_board_array[2] = 'K'   # c1 = target king (show before placement!)
+                    self._tutorial_board_array[3] = 'R'   # d1 = target rook (show before placement!)
+                    self._tutorial_board_array[6] = 'R'   # g1 rook stays
+                    self._centaur_screen.draw_board(self._tutorial_board_array, start_row=1.6)
+                    self._tutorial_update_text_only(
+                        (9.0, "Queenside:"),
+                        (10.5, "Place King"),
+                        (11.5, "c1, Rook d1")
+                    )
+                    self._tutorial_start_blink([2, 3])  # c1, d1
+                else:
+                    # Wrong field
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Log.info(f"Chess960: Wrong place {field_index}, expected b1(1)")
+        
+        elif self._tutorial_state == 'queenside_place_pieces':
+            if action == Enums.PieceAction.PLACE:
+                if field_index in {2, 3}:  # c1 or d1
+                    Centaur.sound(Enums.Sound.CORRECT_MOVE)
+                    self._tutorial_qs_placed.add(field_index)
+                    # Update board: c1=King, d1=Rook
+                    piece = 'K' if field_index == 2 else 'R'
+                    self._tutorial_update_piece(field_index, piece)
+                    Log.info(f"Chess960: Piece placed on {field_index}, qs_placed={self._tutorial_qs_placed}")
+                    
+                    # Remove from blink
+                    remaining = {2, 3} - self._tutorial_qs_placed
+                    if remaining:
+                        self._tutorial_start_blink(list(remaining))
+                    else:
+                        # Both placed! Queenside complete
+                        self._tutorial_stop_blink_thread()
+                        Log.info("Chess960: Queenside complete!")
+                        threading.Timer(0.5, self._tutorial_queenside_complete).start()
+                else:
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Log.info(f"Chess960: Wrong place {field_index}, expected c1(2) or d1(3)")
+            
+            elif action == Enums.PieceAction.LIFT:
+                if field_index in {2, 3} and field_index in self._tutorial_qs_placed:
+                    # Piece removed
+                    self._tutorial_qs_placed.remove(field_index)
+                    self._tutorial_update_piece(field_index, ' ')  # Remove from board
+                    Log.info(f"Chess960: Piece lifted from {field_index}, qs_placed={self._tutorial_qs_placed}")
+                    remaining = {2, 3} - self._tutorial_qs_placed
+                    if remaining:
+                        self._tutorial_start_blink(list(remaining))
+        
+        # Reset phase: same logic as setup, but different completion callback
+        elif self._tutorial_state == 'reset_to_start':
+            target_fields = {1, 5, 6}  # b1, f1, g1
+            
+            if action == Enums.PieceAction.PLACE:
+                if field_index in target_fields:
+                    # Correct field!
+                    Centaur.sound(Enums.Sound.CORRECT_MOVE)
+                    self._tutorial_placed_fields.add(field_index)
+                    # Update board: b1=Rook, f1=King, g1=Rook
+                    piece = 'R' if field_index in {1, 6} else 'K'
+                    self._tutorial_update_piece(field_index, piece)
+                    Log.info(f"Chess960: Reset: Piece placed on correct field {field_index}, placed={self._tutorial_placed_fields}")
+                    
+                    # Remove from blink list
+                    remaining = target_fields - self._tutorial_placed_fields
+                    if remaining:
+                        self._tutorial_start_blink(list(remaining))
+                    else:
+                        # All 3 pieces placed!
+                        self._tutorial_stop_blink_thread()
+                    
+                    # Check if all 3 are placed
+                    if len(self._tutorial_placed_fields) == 3:
+                        Log.info("Chess960: Reset complete!")
+                        threading.Timer(0.5, self._tutorial_reset_complete).start()
+                else:
+                    # Wrong field
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Log.info(f"Chess960: Reset: Piece placed on wrong field {field_index}")
+            
+            elif action == Enums.PieceAction.LIFT:
+                # Allow LIFT on target fields (b1, f1, g1) AND on queenside pieces (c1, d1)
+                if field_index in target_fields and field_index in self._tutorial_placed_fields:
+                    # Piece removed from correct field
+                    self._tutorial_placed_fields.remove(field_index)
+                    self._tutorial_update_piece(field_index, ' ')  # Remove from board
+                    Log.info(f"Chess960: Reset: Piece lifted from {field_index}, placed={self._tutorial_placed_fields}")
+                    
+                    # Add back to blink list
+                    remaining = target_fields - self._tutorial_placed_fields
+                    if remaining:
+                        self._tutorial_start_blink(list(remaining))
+                elif field_index in {2, 3}:  # c1 or d1 (queenside pieces from last castling)
+                    # Allow lifting queenside pieces to make room
+                    self._tutorial_update_piece(field_index, ' ')  # Remove from board
+                    Log.info(f"Chess960: Reset: Queenside piece lifted from {field_index}")
+        
+        # Kingside castling states (analog to queenside)
+        elif self._tutorial_state == 'kingside_lift_rook':
+            if action == Enums.PieceAction.LIFT:
+                if field_index == 6:  # g1
+                    # Correct: rook lifted from g1
+                    Centaur.sound(Enums.Sound.CORRECT_MOVE)
+                    self._tutorial_update_piece(6, ' ')  # Remove rook from board
+                    self._tutorial_stop_blink_thread()
+                    Log.info("Chess960: Rook lifted from g1, state → kingside_lift_king")
+                    self._tutorial_state = 'kingside_lift_king'
+                    # New screen: lift king from f1
+                    self._tutorial_update_text_only(
+                        (9.0, "Good!"),
+                        (10.5, "Now lift"),
+                        (11.5, "King from"),
+                        (12.5, "f1")
+                    )
+                    self._tutorial_start_blink([5])  # f1
+                else:
+                    # Wrong piece lifted
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Log.info(f"Chess960: Wrong lift {field_index}, expected g1(6)")
+        
+        elif self._tutorial_state == 'kingside_lift_king':
+            if action == Enums.PieceAction.LIFT:
+                if field_index == 5:  # f1
+                    # Correct: king lifted from f1
+                    Centaur.sound(Enums.Sound.CORRECT_MOVE)
+                    self._tutorial_update_piece(5, ' ')  # Remove king from board
+                    self._tutorial_update_piece(6, 'K')  # Show target: g1 = King (like in real game!)
+                    self._tutorial_stop_blink_thread()
+                    Log.info("Chess960: King lifted from f1, state → kingside_place_king")
+                    self._tutorial_state = 'kingside_place_king'
+                    # New screen: place king on g1
+                    self._tutorial_update_text_only(
+                        (9.0, "Perfect!"),
+                        (10.5, "Place King"),
+                        (11.5, "on g1")
+                    )
+                    self._tutorial_start_blink([6])  # g1
+                else:
+                    # Wrong piece lifted
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Log.info(f"Chess960: Wrong lift {field_index}, expected f1(5)")
+        
+        elif self._tutorial_state == 'kingside_place_king':
+            if action == Enums.PieceAction.PLACE:
+                if field_index == 6:  # g1
+                    # Correct: king placed on g1 → kingside castling done, show target
+                    Centaur.sound(Enums.Sound.CORRECT_MOVE)
+                    self._tutorial_update_piece(6, 'K')  # Place king on board
+                    self._tutorial_stop_blink_thread()
+                    Log.info("Chess960: King placed on g1, state → kingside_place_pieces")
+                    self._tutorial_state = 'kingside_place_pieces'
+                    self._tutorial_ks_placed = {6}  # King already on g1!
+                    # Show final kingside positions (Kg1, Rf1) - board direct, no clear!
+                    self._centaur_screen.draw_fen(self._tutorial_fen_ks, startrow=1.6)
+                    self._tutorial_update_text_only(
+                        (9.0, "Kingside:"),
+                        (10.5, "Place Rook"),
+                        (11.5, "on f1")
+                    )
+                    self._tutorial_start_blink([5])  # Only f1 (rook position)
+                else:
+                    # Wrong field
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Log.info(f"Chess960: Wrong place {field_index}, expected g1(6)")
+        
+        elif self._tutorial_state == 'kingside_place_pieces':
+            if action == Enums.PieceAction.PLACE:
+                if field_index == 5:  # f1 (rook)
+                    Centaur.sound(Enums.Sound.CORRECT_MOVE)
+                    self._tutorial_ks_placed.add(field_index)
+                    self._tutorial_update_piece(5, 'R')  # Place rook on board
+                    Log.info(f"Chess960: Rook placed on f1, ks_placed={self._tutorial_ks_placed}")
+                    
+                    # Check if both are placed (king was pre-placed at 6, now rook at 5)
+                    if len(self._tutorial_ks_placed) == 2:
+                        # Both placed! Kingside complete
+                        self._tutorial_stop_blink_thread()
+                        Log.info("Chess960: Kingside complete - Tutorial finished!")
+                        threading.Timer(0.5, self._tutorial_kingside_complete).start()
+                else:
+                    Centaur.sound(Enums.Sound.WRONG_MOVE)
+                    Log.info(f"Chess960: Wrong place {field_index}, expected f1(5)")
+            
+            elif action == Enums.PieceAction.LIFT:
+                if field_index == 5 and field_index in self._tutorial_ks_placed:
+                    # Rook removed from f1
+                    self._tutorial_ks_placed.remove(field_index)
+                    self._tutorial_update_piece(5, ' ')  # Remove rook from board
+                    Log.info(f"Chess960: Rook lifted from f1, ks_placed={self._tutorial_ks_placed}")
+                    self._tutorial_start_blink([5])
+
+    def _tutorial_update_piece(self, field_index, piece_char):
+        """Update single piece on board array and redraw board (no screen clear = no flicker!)."""
+        self._tutorial_board_array[field_index] = piece_char
+        # Redraw board only (no clear_screen!)
+        self._centaur_screen.draw_board(self._tutorial_board_array, start_row=1.6)
+        Log.info(f"Chess960: Board updated: field {field_index} = '{piece_char}'")
+
+    def _tutorial_update_text_only(self, *line_tuples):
+        """Update only text area (rows 9-15), keeping board intact."""
+        # Overwrite all text rows with spaces first (no clear_area = no sleep!)
+        # Extended to row 15 to ensure all old text is cleared
+        for row in [9.0, 10.0, 10.5, 11.0, 11.5, 12.0, 12.5, 13.0, 13.5, 14.0, 14.5, 15.0]:
+            self._centaur_screen.write_text(row, " ", font=fonts.MAIN_FONT)
+        # Write new text
+        for row, text in line_tuples:
+            self._centaur_screen.write_text(row, text, font=fonts.MAIN_FONT)
+
+    def _tutorial_set_board_and_text(self, fen, *line_tuples):
+        """Set board FEN and text (full screen clear)."""
+        Centaur.clear_screen()
+        self._centaur_screen.draw_fen(fen, startrow=1.6)
+        for row, text in line_tuples:
+            self._centaur_screen.write_text(row, text, font=fonts.MAIN_FONT)
+
+    def _tutorial_queenside_complete(self):
+        """Called when queenside castling is complete. Transition to reset phase."""
+        Log.info("Chess960: Queenside castling complete")
+        Centaur.sound(Enums.Sound.CORRECT_MOVE)
+        
+        # Show success screen (text only, board stays)
+        self._tutorial_update_text_only(
+            (9.0, "Queenside"),
+            (10.0, "complete!"),
+            (11.5, "Next:"),
+            (12.5, "Kingside!")
+        )
+        
+        # Transition to reset phase after 4 seconds
+        threading.Timer(4.0, self._tutorial_start_reset).start()
+
+    def _tutorial_start_reset(self):
+        """Start reset phase: ask user to reset pieces to starting position."""
+        Log.info("Chess960: Starting reset phase")
+        self._tutorial_state = 'reset_to_start'
+        self._tutorial_placed_fields.clear()  # Reset tracking
+        
+        # Set array to target positions (show before placement, like in real game!)
+        self._tutorial_board_array = [' '] * 64
+        self._tutorial_board_array[1] = 'R'   # b1 = target rook (show before placement!)
+        self._tutorial_board_array[5] = 'K'   # f1 = target king (show before placement!)
+        self._tutorial_board_array[6] = 'R'   # g1 = target rook (show before placement!)
+        self._centaur_screen.draw_board(self._tutorial_board_array, start_row=1.6)
+        
+        self._tutorial_update_text_only(
+            (9.0, "Reset pieces"),
+            (10.0, "to start:"),
+            (11.0, "Rook b1"),
+            (12.0, "King f1"),
+            (13.0, "Rook g1")
+        )
+        
+        # Start blinking b1, f1, g1
+        self._tutorial_start_blink([1, 5, 6])
+        Log.info("Chess960: Reset screen displayed, LEDs blinking")
+
+    def _tutorial_reset_complete(self):
+        """Called when all pieces are reset to starting position. Start kingside."""
+        Log.info("Chess960: Reset complete, starting kingside castling")
+        Centaur.sound(Enums.Sound.CORRECT_MOVE)
+        
+        # Show transition screen (text only, board stays!)
+        self._tutorial_update_text_only(
+            (9.0, "Good!"),
+            (10.5, "Now:"),
+            (11.5, "Kingside"),
+            (12.5, "castling")
+        )
+        
+        # Transition to kingside after 2 seconds
+        threading.Timer(2.0, self._tutorial_start_kingside).start()
+
+    def _tutorial_start_kingside(self):
+        """Start kingside castling sequence: lift rook from g1."""
+        Log.info("Chess960: Starting kingside castling")
+        self._tutorial_state = 'kingside_lift_rook'
+        self._tutorial_ks_placed.clear()  # Reset tracking
+        
+        # Update text only (board stays!)
+        self._tutorial_update_text_only(
+            (9.0, "Kingside"),
+            (10.0, "castling:"),
+            (11.5, "Lift Rook"),
+            (12.5, "from g1")
+        )
+        
+        # Blink g1 (source)
+        self._tutorial_start_blink([6])
+        Log.info("Chess960: Kingside lift_rook screen displayed")
+
+    def _tutorial_kingside_complete(self):
+        """Called when kingside castling is complete. Tutorial finished!"""
+        Log.info("Chess960: Kingside castling complete - Tutorial finished!")
+        Centaur.sound(Enums.Sound.VICTORY)
+        
+        # Show final success screen (text only, board stays)
+        self._tutorial_update_text_only(
+            (9.0, "Perfect!"),
+            (10.5, "Tutorial"),
+            (11.5, "complete!"),
+            (13.0, "BACK: exit")
+        )
+        
+        # Tutorial is complete, wait for BACK key
+        self._tutorial_state = 'complete'
+
+    def _tutorial_exit(self):
+        """Exit tutorial and return to splash screen."""
+        Log.info("Chess960: Tutorial exit")
+        self._tutorial_active = False
+        self._tutorial_state = None
+        self._tutorial_stop_blink_thread()
+        self._centaur_board.unsubscribe_events()
+        self.splash_screen()
+
+    def _tutorial_setup_complete(self):
+        """Called when all 3 pieces are correctly placed. Transition to queenside castling."""
+        Log.info("Chess960: Setup complete, transitioning to queenside castling")
+        Centaur.sound(Enums.Sound.CORRECT_MOVE)
+        
+        # Update text only (board stays!)
+        self._tutorial_update_text_only(
+            (9.0, "Well done!"),
+            (10.5, "Next:"),
+            (11.5, "Queenside"),
+            (12.5, "castling")
+        )
+        
+        # Transition to queenside after 2 seconds (non-blocking)
+        threading.Timer(2.0, self._tutorial_start_queenside).start()
+
+    def _tutorial_start_queenside(self):
+        """Start queenside castling sequence: lift rook from b1."""
+        Log.info("Chess960: Starting queenside castling")
+        self._tutorial_state = 'queenside_lift_rook'
+        
+        # Update text only (board stays!)
+        self._tutorial_update_text_only(
+            (9.0, "Queenside"),
+            (10.0, "castling:"),
+            (11.5, "Lift Rook"),
+            (12.5, "from b1")
+        )
+        
+        # Blink b1 (source)
+        self._tutorial_start_blink([1])
+        Log.info("Chess960: Queenside lift_rook screen displayed")
+
+    # -------------------------------------------------------------------------
+    # Plugin lifecycle
+    # -------------------------------------------------------------------------
+
      # When exists, this function is automatically invoked
      # when the plugin starts.
     def splash_screen(self) -> bool:
@@ -717,9 +1327,12 @@ class Chess960(Plugin):
 
         print("CHESS960", row=2)
         print("BOT", font=fonts.DIGITAL_FONT, row=4)
-        print("Push PLAY", row=8)
-        print("to")
-        print("configure!")
+        print("Push PLAY", row=6)
+        print("to start!")
+        print("")
+        print("Push HELP")
+        print("for Castling")
+        print("Tutorial")
 
         # The splash screen is activated.
         return True
