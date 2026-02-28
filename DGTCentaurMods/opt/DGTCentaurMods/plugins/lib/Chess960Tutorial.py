@@ -88,7 +88,6 @@ class Chess960Tutorial:
 
         # Draw the intro screen
         self._draw_intro_screen()
-        Log.info("Chess960Tutorial: Intro screen displayed")
 
     # -------------------------------------------------------------------------
     # Event Callbacks
@@ -96,8 +95,6 @@ class Chess960Tutorial:
 
     def _key_callback(self, key: Enums.Btn):
         """Handle key events during the tutorial."""
-        Log.info(f"Chess960Tutorial: Key callback: key={key}, state={self._tutorial_state}")
-        
         if key == Enums.Btn.BACK:
             Log.info("Chess960Tutorial: Tutorial exited via BACK")
             self._exit()
@@ -113,8 +110,6 @@ class Chess960Tutorial:
 
     def _field_callback(self, field_index, action):
         """Handle field (piece lift/place) events during the tutorial."""
-        Log.info(f"Chess960Tutorial: Field callback: field={field_index}, action={action}, state={self._tutorial_state}")
-        
         # Route to appropriate state handler
         if self._tutorial_state == 'setup':
             self._handle_setup(field_index, action)
@@ -149,7 +144,6 @@ class Chess960Tutorial:
             if field_index in target_fields:
                 Centaur.sound(Enums.Sound.CORRECT_MOVE)
                 self._tutorial_placed_fields.add(field_index)
-                Log.info(f"Chess960Tutorial: Piece placed on {field_index}, placed={self._tutorial_placed_fields}")
                 
                 remaining = target_fields - self._tutorial_placed_fields
                 if remaining:
@@ -162,12 +156,10 @@ class Chess960Tutorial:
                     threading.Timer(0.5, self._setup_complete).start()
             else:
                 Centaur.sound(Enums.Sound.WRONG_MOVE)
-                Log.info(f"Chess960Tutorial: Wrong field {field_index}")
         
         elif action == Enums.PieceAction.LIFT:
             if field_index in target_fields and field_index in self._tutorial_placed_fields:
                 self._tutorial_placed_fields.remove(field_index)
-                Log.info(f"Chess960Tutorial: Piece lifted from {field_index}")
                 remaining = target_fields - self._tutorial_placed_fields
                 if remaining:
                     self._start_blink(list(remaining))
@@ -178,7 +170,6 @@ class Chess960Tutorial:
             Centaur.sound(Enums.Sound.CORRECT_MOVE)
             self._update_piece(1, ' ')
             self._stop_blink_thread()
-            Log.info("Chess960Tutorial: Rook lifted from b1 → queenside_lift_king")
             self._tutorial_state = 'queenside_lift_king'
             self._update_text_only(
                 (9.0, "Good!"),

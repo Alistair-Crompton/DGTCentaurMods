@@ -58,7 +58,6 @@ class PieceHandler:
         # Takeback progress tracking
         self._takeback_in_progress = False
         self._takeback_from_square = UNDEFINED_SQUARE
-        self._takeback_to_square = UNDEFINED_SQUARE
 
         # Castling adjustment tracking
         self._last_move_was_castling = False
@@ -166,7 +165,6 @@ class PieceHandler:
 
     def _commit_move(self, uci_move: str, san_move: str) -> None:
         if self._dal.insert_new_game_move(uci_move, str(self._fen())):
-            Log.debug(f'Move "{uci_move}/{san_move}" has been committed.')
             self._engine._computer_move_is_ready = False
             self._engine._san_move_list.append(san_move)
             
@@ -183,12 +181,6 @@ class PieceHandler:
                 CENTAUR_BOARD.led(self._place1)
 
             self._update_display()
-# self._engine.update_web_ui({
-#     "clear_board_graphic_moves": True,
-#     "uci_move": uci_move,
-#     "san_move": san_move,
-#     "field_index": self._place1
-# })
             self._last_move_was_castling = self.was_last_move_castling()
             self._engine._check_last_move_outcome_and_switch()
         else:
@@ -214,7 +206,6 @@ class PieceHandler:
         else:
             # Engine can still reject moves that pass our simplified
             # legality check.  It's the final authority.
-            Log.debug(f'Client rejected the move "{uci_move}/{san_move}"...')
             self._chessboard.pop()
             self._wrong_move()
             return False
@@ -223,7 +214,6 @@ class PieceHandler:
             self, player_uci_move: str, promoted_piece: str = "") -> str:
 
         player_move = player_uci_move + promoted_piece
-        computer_base = self._computer_uci_move[0:4] if self._engine._computer_move_is_ready else ""
         if self._engine._computer_move_is_ready:
             override = self._can_force_moves and not self._is_promotion() and player_uci_move != self._computer_uci_move[0:4]
             if override:
@@ -238,7 +228,6 @@ class PieceHandler:
         self._promotion_move = None
 
         if not self._is_legal_move(player_uci_move):
-            Log.debug(f'ILLEGAL move "{player_uci_move}"')
             self._wrong_move()
             return False
 
@@ -253,7 +242,6 @@ class PieceHandler:
             self._undo_stack.append({'fen_before': fen_before, 'move': uci_move})
             return self._accept_move(uci_move, san_move)
         except Exception as e:
-            Log.debug(f'INVALID move "{uci_move}"')
             self._wrong_move()
             return False
 
@@ -262,14 +250,8 @@ class PieceHandler:
         if not piece:
             return False
         piece_name = piece.symbol()
-
-        white_pawn, black_pawn = piece_name == "P", piece_name == "p"
-
         rank = self._place1 // 8
-
-        first_rank, last_rank = rank == 0, rank == 7
-
-        return (white_pawn and last_rank) or (black_pawn and first_rank)
+        return (piece_name == "P" and rank == 7) or (piece_name == "p" and rank == 0)
 
     def _ask_user_for_promotion(self) -> bool:
         """Promotion menu display if player is human or if player
@@ -302,7 +284,6 @@ class PieceHandler:
     def _attempt_move(self) -> bool:
         """Piece has been moved"""
 
-        Log.info(f'Piece has been moved to "{self._to_square_name(self._place1)}".')
         if self._is_promotion() and self._ask_user_for_promotion():
             self._prompt_for_promotion()
         else:
@@ -312,7 +293,6 @@ class PieceHandler:
 
     def _is_takeback(self) -> bool:
         """Is this an attempt to take back a move?"""
-        Log.debug(f"can_undo: {self._can_undo_moves}, move==undo: {self._move_name() == self._undo_name()}")
         if self._last_move_was_castling and self._move_name() == self._undo_name():
             return False
         return self._can_undo_moves and \
@@ -322,7 +302,6 @@ class PieceHandler:
         """Previous move has been taken back"""
 
         if not self._undo_stack:
-            Log.debug("undo_stack empty")
             return False
 
         # Get the previous state from stack
@@ -330,12 +309,9 @@ class PieceHandler:
         previous_uci_move = previous_state['move']
         previous_san_move = self._engine._san_move_list.pop()
 
-        Log.debug(f'Undoing move "{previous_uci_move}"...')
-
         # Restore board state from FEN
         self._chessboard.set_fen(previous_state['fen_before'])
 
-        Log.debug(f'Move "{previous_uci_move}/{previous_san_move}" will be removed from DB...')
         self._dal.delete_last_game_move()
 
         self._engine._computer_move_is_ready = False
@@ -353,21 +329,8 @@ class PieceHandler:
             # Set takeback progress mode
             self._takeback_in_progress = True
             self._takeback_from_square = from_square
-            self._takeback_to_square = to_square
-
-            Log.info(f"Takeback in progress: Move piece from {common.Converters.to_square_name(to_square)} back to {common.Converters.to_square_name(from_square)}")
-        else:
-            Log.info("Takeback completed without LED guidance")
-
+        
         self._update_display()
-#         self._engine.update_web_ui({
-#             "clear_board_graphic_moves": True,
-#             "uci_undo_move": previous_uci_move,
-#             "uci_move": None,
-#             "takeback_in_progress": show_leds,
-#             "takeback_from": common.Converters.to_square_name(from_square),
-#             "takeback_to": common.Converters.to_square_name(to_square),
-#         })
 
         Engine._Engine__invoke_callback(
             self._engine._undo_callback_function,
@@ -423,17 +386,13 @@ class PieceHandler:
             # Move is incomplete
             return False
 
-        Log.debug(f"Interpreting actions: lift1={self._to_square_name(self._lift1)}, place1={self._to_square_name(self._place1)}, lift2={self._to_square_name(self._lift2) if self._lift2 != UNDEFINED_SQUARE else 'NONE'}")
-
         # Check if takeback is in progress
         if self._takeback_in_progress:
             if self._place1 == self._takeback_from_square:
                 # Piece has been moved back to start position - complete takeback
-                Log.info(f"Takeback completed: piece moved back to {self._to_square_name(self._takeback_from_square)}")
                 CENTAUR_BOARD.leds_off()
                 self._takeback_in_progress = False
                 self._takeback_from_square = UNDEFINED_SQUARE
-                self._takeback_to_square = UNDEFINED_SQUARE
                 self._engine.update_web_ui({
                     "takeback_in_progress": False,
                     "takeback_completed": True,
@@ -443,16 +402,11 @@ class PieceHandler:
                 self._engine._check_last_move_outcome_and_switch()
                 result = True
             else:
-                Log.info(f"Takeback in progress: ignoring action, waiting for piece to be placed on {self._to_square_name(self._takeback_from_square)}")
                 # Ignore other actions during takeback
                 result = False
         else:
             # Normal event processing - Chess960 castling is now handled by standard moves
             self._normalize_event_order()
-
-            Log.debug(f"consistent? {self._piece_color_is_consistent}")
-            Log.debug(f"is_takeback? {self._is_takeback()}")
-            Log.debug(f"undo_name: {self._undo_name()}, move_name: {self._move_name()}")
 
             if self._lift1 == self._place1:
                 self._engine._update_board_state(self._web_move)
@@ -460,7 +414,6 @@ class PieceHandler:
                 # Piece has simply been placed back
                 pass
             elif self._piece_color_is_consistent:
-                Log.debug(f"Normal move attempt: {self._move_name()}")
                 result = self._attempt_move()
             elif self._is_takeback():
                 result = self._takeback_move()
@@ -481,8 +434,6 @@ class PieceHandler:
     # Receives field events from the board.
     # field_index 0 = a1, 63 = h8
     def __call__(self, field_index: chess.Square, field_action, web_move: bool) -> None:
-        Log.debug(f"field_index:{field_index}, square_name:{self._to_square_name(field_index)}, piece_action:{field_action}")
-
         # We do not need to check reset if piece is lifted
         self._engine._need_starting_position_check = False
 
@@ -515,15 +466,12 @@ class PieceHandler:
                 return
             self._place1 = field_index
 
-            Log.debug(f"invalid_state: {self._engine._invalid_board_state}")
-
             # Always interpret actions (allow takeback even if board invalid)
             result = self._interpret_actions()
 
             # If board was invalid, warn user
             if self._engine._invalid_board_state:
                 CENTAUR_BOARD.beep(Enums.Sound.WRONG_MOVE)
-                Log.info("The board needs to be re-arranged!")
 
             return result
 
@@ -547,8 +495,6 @@ class Engine():
     _computer_move_is_ready = False
 
     _chessboard = None
-
-    _san_move_list = []
 
     _chess_engine: ChessEngine.ChessEngineWrapper = None
 
@@ -574,7 +520,6 @@ class Engine():
         self._original_fen = custom_fen  # Chess960 Plugin edit by Chemtech1 - Store original custom FEN for board reset
         Log.info(f"Initializing Chess960 board with FEN: {custom_fen}")
         self._chessboard = chess.Board(custom_fen, chess960=True)  # Chess960 Plugin edit by Chemtech1 - Enable Chess960 mode
-        self._chessboard.chess960 = True  # Set custom attribute for status checking
         Log.info(f"Chess960 mode status: {self._chessboard.chess960}")
 
         SCREEN.clear_area()
@@ -667,9 +612,8 @@ class Engine():
 
     @staticmethod
     def __invoke_callback(callback, **args):
-        if callback != None:
+        if callback is not None:
             try:
-                Log.debug(f"{Engine.__invoke_callback.__name__}[{callback.__name__}({args})]")
                 return callback(**args)
             except Exception as e:
                 Log.exception(Engine.__invoke_callback, e)
@@ -682,7 +626,7 @@ class Engine():
 
         self._computer_uci_move = ""
         self._computer_move_is_ready = False
-        self._san_move_list = []
+        self._san_move_list = []  # Instance attribute, not class attribute
         self._piece_handler = PieceHandler(self)
 
         self._new_evaluation_requested = False
@@ -747,11 +691,8 @@ class Engine():
             # Perform takeback if possible, otherwise show previous move
             if key == Enums.Btn.DOWN:
 
-                Log.info("DOWN key pressed - checking for takeback")
-
                 if self._previous_move_displayed:
 
-                     Log.info("Previous move was displayed, turning off LEDs")
                      self._previous_move_displayed = False
 
                      if self._computer_move_is_ready:
@@ -764,43 +705,20 @@ class Engine():
 
                     # Try to perform takeback first
                     if self._piece_handler._takeback_in_progress:
-                        Log.info("Takeback in progress, ignoring DOWN key")
                         return
                     elif self._piece_handler._can_undo_moves and self._piece_handler._undo_stack:
-                        Log.info("Performing takeback via DOWN key")
                         self._piece_handler._takeback_move(show_leds=True)
                     else:
-                        Log.info("No takeback possible, showing previous move")
                         # Fallback to showing previous move
                         previous_uci_move = self.last_uci_move
-                        Log.info(f"Last UCI move: {previous_uci_move}")
 
                         if previous_uci_move:
-                            # Analyze if it's a castling move
-                            was_castling = False
-                            if len(previous_uci_move) >= 4:
-                                to_square = previous_uci_move[2:4]
-                                if to_square[0] in ['c', 'g']:
-                                    was_castling = True
-
-                            Log.info(f"Is castling move: {was_castling}")
-                            Log.info(f"Current FEN: {self._chessboard.fen()}")
-
                             from_num = common.Converters.to_square_index(previous_uci_move, Enums.SquareType.ORIGIN)
                             to_num = common.Converters.to_square_index(previous_uci_move, Enums.SquareType.TARGET)
 
                             CENTAUR_BOARD.led_from_to(from_num,to_num)
 
-                            Log.info(f"Highlighting from {common.Converters.to_square_name(from_num)} to {common.Converters.to_square_name(to_num)}")
-
-#                             self.send_message_to_web_ui({
-#                                 "clear_board_graphic_moves":False,
-#                                 "uci_move":previous_uci_move,
-#                             })
-
                             self._previous_move_displayed = True
-                        else:
-                            Log.info("No previous move to show")
 
     # Receives field events from the board.
     # Positive is a field lift, negative is a field place.
@@ -829,12 +747,7 @@ class Engine():
         # Check the outcome
         outcome = self._chessboard.outcome(claim_draw=True)
 
-        # Log all legal moves when turn switches to white (for debugging)
-        if self._chessboard.turn == chess.WHITE:
-            all_legal_moves = [move.uci() for move in self._chessboard.legal_moves]
-            Log.info(f'All legal moves for white: {all_legal_moves}')
-
-        if outcome == None or outcome == "None" or outcome == 0:
+        if outcome is None:
             # Switch the turn
             Engine.__invoke_callback(self._event_callback_function, event=Enums.Event.PLAY, outcome=None)
         else:
@@ -861,10 +774,6 @@ class Engine():
             # Cancel any pending evaluation requests after game end to prevent analyse errors
             self.cancel_evaluation()
             self._new_evaluation_requested = False
-
-#             self.send_message_to_web_ui({
-#                 "turn_caption":str_outcome
-#             })
 
             Engine.__invoke_callback(self._event_callback_function, event=Enums.Event.TERMINATION, outcome=outcome)
 
@@ -920,14 +829,14 @@ class Engine():
 
         self._dal.delete_empty_games()
         
-        ticks = -1
+        first_run = True
 
         try:
             while self._started:
 
                 # First time we are here
                 # We might need to resume a game...
-                if ticks == -1:
+                if first_run:
 
                     uci_moves_history = self._uci_moves_at_start if len(self._uci_moves_at_start)>0 else self._dal.read_uci_moves_history()
 
@@ -973,10 +882,6 @@ class Engine():
                                 self.display_board()
                                 self.display_partial_PGN()
 
-#                                 self.update_web_ui({
-#                                     "clear_board_graphic_moves":True,
-#                                     "uci_move":last_uci_move })
-
                                 Engine.__invoke_callback(self._event_callback_function, event=Enums.Event.RESUME_GAME, outcome=None)
                                 
                                 self.update_evaluation()
@@ -988,7 +893,7 @@ class Engine():
                         except Exception as e:
                             Log.exception(Engine._game_thread_instance_worker, e)
 
-                ticks = 0  # Fix: Prevent endless resume loop
+                first_run = False  # Prevent endless resume loop
 
                 # Always initialize Chess960 game immediately
                 if self._need_starting_position_check:
@@ -1011,9 +916,6 @@ class Engine():
 
                     self.display_board()
                     self.display_partial_PGN()
-#                     self.update_web_ui({
-#                         "clear_board_graphic_moves":True
-#                     })
 
                     # Log a new game in the db
                     self._dal.insert_new_game(
@@ -1061,7 +963,7 @@ class Engine():
     def is_started(self):
         return self._started
 
-    def start(self, uci_moves = []):
+    def start(self, uci_moves = None):
 
         if self._started:
             return
@@ -1070,7 +972,7 @@ class Engine():
 
         SOCKET.initialize(on_socket_request=self._on_socket_request)
 
-        self._uci_moves_at_start = uci_moves
+        self._uci_moves_at_start = uci_moves if uci_moves is not None else []
         
         self._need_starting_position_check = True
 
@@ -1165,10 +1067,6 @@ class Engine():
                 uci_hint_move = results[0].uci_move
 
                 Log.info(f'Engine help requested :"{uci_hint_move}"')
-
-#                 self.send_message_to_web_ui({
-#                     "tip_uci_move":uci_hint_move
-#                 })
 
                 if uci_hint_move!= None:
                     from_num = common.Converters.to_square_index(uci_hint_move, Enums.SquareType.ORIGIN)
@@ -1375,11 +1273,11 @@ class Engine():
             try:
                 chess.Move.from_uci(uci_move)
             except Exception as e:
-                Log.error(f'INVALID uci_computer_move "{uci_move}": {e}')
+                Log.info(f'INVALID uci_computer_move "{uci_move}": {e}')
                 return False
 
             if uci_move not in legal_ucis:
-                Log.error(f'ILLEGAL uci_computer_move "{uci_move}" not in {legal_ucis[:5]}...')
+                Log.info(f'ILLEGAL uci_computer_move "{uci_move}" not in {legal_ucis[:5]}...')
                 return False
 
             # First set the globals so that the thread knows there is a computer move
@@ -1395,13 +1293,7 @@ class Engine():
             # Then light it up!
             CENTAUR_BOARD.led_from_to(from_num,to_num)
 
-#             self.send_message_to_web_ui({
-#                 "clear_board_graphic_moves":False,
-#                 "computer_uci_move":uci_move,
-#             })
-
             return True
  
         except Exception as e:
-            Log.exception(Engine.set_computer_move, e)
             Log.exception(Engine.set_computer_move, e)

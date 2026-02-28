@@ -21,16 +21,15 @@
 
 # Created by chemtech1
 
-# Chess960 Plugin edit by Chemtech1 - New Chess960 bot plugin that generates random Chess960 positions and plays with Stockfish engine
 
-import chess, random, os, configparser, subprocess, time, select, threading
+
+import chess, random, os, configparser, subprocess, time, select
 from pathlib import Path
 
 from PIL import ImageDraw
 
 from DGTCentaurMods.classes.Plugin import Plugin, Centaur
 from DGTCentaurMods.classes import Log, ChessEngine, CentaurBoard, CentaurScreen
-from DGTCentaurMods.classes.GameFactoryChess960 import Engine
 from DGTCentaurMods.consts import Enums, fonts, consts
 from DGTCentaurMods.plugins.lib.Chess960Tutorial import Chess960Tutorial
 
@@ -75,7 +74,7 @@ class Chess960(Plugin):
             if self._started:
                 self.event_callback(event, outcome)
         except Exception as e:
-            Log.error(f"Exception in event_callback: {str(e)}")
+            Log.exception(self.__event_callback, f"Exception in event_callback: {str(e)}")
             self.stop()
 
     def __move_callback(self, uci_move:str, san_move:str, color:chess.Color, field_index:chess.Square):
@@ -83,7 +82,7 @@ class Chess960(Plugin):
             if self._started:
                 return self.move_callback(uci_move, san_move, color, field_index)
         except Exception as e:
-            Log.error(f"Exception in move_callback: {str(e)}")
+            Log.exception(self.__move_callback, f"Exception in move_callback: {str(e)}")
             self.stop()
         return False
 
@@ -92,7 +91,7 @@ class Chess960(Plugin):
             if self._started:
                 return self.undo_callback(uci_move, san_move, field_index)
         except Exception as e:
-            Log.error(f"Exception in undo_callback: {str(e)}")
+            Log.exception(self.__undo_callback, f"Exception in undo_callback: {str(e)}")
             self.stop()
         return False
 
@@ -105,7 +104,7 @@ class Chess960(Plugin):
                 if self._started:
                     return self.on_socket_request(data)
         except Exception as e:
-            Log.error(f"Exception in socket_callback: {str(e)}")
+            Log.exception(self.__socket_callback, f"Exception in socket_callback: {str(e)}")
             self.stop()
         return False
 
@@ -130,7 +129,7 @@ class Chess960(Plugin):
 
             return self.key_callback(key)
         except Exception as e:
-            Log.error(f"Exception in key_callback: {str(e)}")
+            Log.exception(self.__key_callback, f"Exception in key_callback: {str(e)}")
             self.stop()
 
     def _scan_frc_engines(self):
@@ -177,7 +176,6 @@ class Chess960(Plugin):
 
     def check_chess960_support(self, engine_binary: str) -> bool:
         try:
-            Log.info(f"Starting Chess960 support test for {Path(engine_binary).stem}")
             proc = subprocess.Popen(
                 [engine_binary],
                 stdin=subprocess.PIPE,
@@ -190,46 +188,37 @@ class Chess960(Plugin):
             )
 
             def send(cmd):
-                Log.info(f"Sending UCI command: {cmd}")
                 proc.stdin.write(cmd + "\n")
                 proc.stdin.flush()
 
-            Log.info("Sending 'uci' command")
             send("uci")
-            uci_response = self._read_until(proc, "uciok", 5)
-            Log.info(f"UCI response: {uci_response.strip()}")
+            self._read_until(proc, "uciok", 5)
 
-            Log.info("Setting UCI_Chess960 to true")
             send("setoption name UCI_Chess960 value true")
             send("isready")
-            ready_response = self._read_until(proc, "readyok", 5)
-            Log.info(f"Ready response: {ready_response.strip()}")
+            self._read_until(proc, "readyok", 5)
 
-            Log.info("Setting position")
             send("position fen rk6/ppp1pppp/8/8/8/8/PPP1PPPP/2RKR3 b kq - 1 1")
-            Log.info("Starting analysis with go movetime 500")
-            send("go movetime 500")  # 0.5 s reicht völlig
+            send("go movetime 500")
 
             output = self._read_until(proc, "bestmove", 2)
-            Log.info(f"Analysis output: {output.strip()}")
 
-            Log.info("Terminating engine process")
+            # Terminate engine process gracefully, then force-kill if necessary
             proc.terminate()
-            proc.wait(timeout=2)
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                # Engine didn't terminate gracefully, force-kill it
+                proc.kill()
+                proc.wait()  # Wait for final cleanup
 
-            if "bestmove b8a8" in output:
-                Log.info("Bestmove b8a8 erkannt → PASS")
-                result = True
-            elif "pv b8a8" in output:
-                Log.info("PV b8a8 erkannt → PASS")
-                result = True
-            else:
-                result = False
-            Log.info(f"Chess960 support test result: {'PASS' if result else 'FAIL'}")
+            result = "bestmove b8a8" in output or "pv b8a8" in output
+            
+            Log.info(f"Chess960: {Path(engine_binary).stem} Chess960={'YES' if result else 'NO'}")
             return result
 
         except Exception as e:
-            Log.info(f"Chess960 support test exception: {e}")
+            Log.exception(self.check_chess960_support, f"Chess960: Engine test failed: {e}")
             return False
 
     def _read_until(self, proc, keyword: str, timeout: float) -> str:
@@ -241,20 +230,17 @@ class Chess960(Plugin):
                 if proc.stdout in ready:
                     line = proc.stdout.readline()
                     if line:
-                        Log.info(f"Gelesen stdout: {line.strip()}")
                         output += line
                         if keyword in output:
                             break
                 if proc.stderr in ready:
                     line = proc.stderr.readline()
                     if line:
-                        Log.info(f"Gelesen stderr: {line.strip()}")
                         output += line
                         if keyword in output:
                             break
             if proc.poll() is not None:
                 break
-        Log.info(f"Vollständige Antwort: {output.strip()}")
         return output
 
     # This function is automatically invoked when
@@ -268,25 +254,24 @@ class Chess960(Plugin):
     def stop(self):
         # Reset to standard starting position for board and web
         standard_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-        Log.info(f"Chess960: Stop called, FEN before reset: {self._game_engine._chessboard.fen() if self._game_engine else 'No engine'}")
         if self._game_engine:
             self._game_engine._chessboard.set_fen(standard_fen)
-            Log.info(f"Chess960: FEN after set_fen: {self._game_engine._chessboard.fen()}")
             self._game_engine.display_board()  # Update physical board
-        Log.info(f"Chess960: FEN before super.stop(): {self._game_engine._chessboard.fen() if self._game_engine else 'No engine'}")
-        # Auto-send standard FEN (post 518) via super
         super().stop()
 
     # When exists, this function is automatically invoked
     # when the player physically plays a move.
     def move_callback(self, uci_move:str, san_move:str, color:chess.Color, field_index:chess.Square):
-
-        if color == (not self._selected_color):
-            # Computer move is accepted
-            return True
-
-        # Human move is accepted
+        # Accept all moves
         return True
+
+    def _init_position_input(self):
+        """Initialize position input state with random position"""
+        self._chess960_pos = random.randint(0, 959)
+        self._input_str = list(str(self._chess960_pos).zfill(3))
+        self._cursor_pos = 0
+        self._centaur_board.subscribe_events(self._position_key_callback, self._position_field_callback)
+        self._update_pos_display()
 
     def _update_menu_display(self):
         """Update the screen to show current menu state with partial updates"""
@@ -335,8 +320,6 @@ class Chess960(Plugin):
 
     def _handle_menu_navigation(self, key:Enums.Btn) -> bool:
         """Handle menu navigation keys"""
-        Log.info(f"Chess960: _handle_menu_navigation called with key={key}, state={self._menu_state}, index={self._current_index}")
-
         if self._menu_state == "engine":
             max_items = len(self._engines)
         elif self._menu_state == "strength":
@@ -344,25 +327,20 @@ class Chess960(Plugin):
         elif self._menu_state == "color":
             max_items = 2  # White or Black
         else:
-            Log.info(f"Chess960: Invalid menu state: {self._menu_state}")
             return False
 
         if key == Enums.Btn.UP:
             self._current_index = (self._current_index - 1) % max_items
-            Log.info(f"Chess960: UP pressed, new index: {self._current_index}")
             self._update_menu_display()
             return True
         elif key == Enums.Btn.DOWN:
             self._current_index = (self._current_index + 1) % max_items
-            Log.info(f"Chess960: DOWN pressed, new index: {self._current_index}")
             self._update_menu_display()
             return True
         elif key == Enums.Btn.PLAY:
             if self._ignore_next_play:
-                Log.info(f"Chess960: Ignoring PLAY event (menu just started)")
                 self._ignore_next_play = False  # Reset flag
                 return True  # Ignore this PLAY event
-            Log.info(f"Chess960: PLAY pressed, calling _handle_menu_selection")
             self._handle_menu_selection()
             return True
         elif key == Enums.Btn.BACK:
@@ -373,28 +351,20 @@ class Chess960(Plugin):
                 return True
             elif self._menu_state == "color":
                 self._menu_state = "position"
-                self._chess960_pos = random.randint(0, 959)  # New random position
-                self._input_str = list(str(self._chess960_pos).zfill(3))
-                self._cursor_pos = 0
-                self._centaur_board.subscribe_events(self._position_key_callback, self._position_field_callback)
-                self._update_pos_display()
+                self._init_position_input()
                 return True
             else:
                 # For engine or other, stop plugin
                 self.stop()
                 return True
 
-        Log.info(f"Chess960: Key {key} not handled in menu navigation")
         return False
 
     def _handle_menu_selection(self):
         """Handle menu selection and state transitions"""
-        Log.info(f"Chess960: _handle_menu_selection called, state={self._menu_state}, index={self._current_index}")
-
         if self._menu_state == "engine":
             if self._engines:
                 engine = self._engines[self._current_index]
-                Log.info(f"Chess960: Checking {engine['name']} for Chess960 support")
                 Centaur.print("Testing engine...", row=4)
                 if self.check_chess960_support(engine['binary_path']):
                     self._selected_engine = engine
@@ -411,29 +381,20 @@ class Chess960(Plugin):
                     Centaur.clear_screen()
                     self._menu_initialized = False
                     self._update_menu_display()
-            else:
-                Log.info("Chess960: No engines available for selection")
 
         elif self._menu_state == "strength":
             if self._strengths:
                 self._selected_strength = self._strengths[self._current_index]
                 Log.info(f"Chess960: Selected strength: {self._selected_strength}")
                 self._menu_state = "position"
-                self._chess960_pos = random.randint(0, 959)
-                self._input_str = list(str(self._chess960_pos).zfill(3))
-                self._cursor_pos = 0
                 Centaur.clear_screen()
                 self._menu_initialized = False
-                self._centaur_board.subscribe_events(self._position_key_callback, self._position_field_callback)
-                self._update_pos_display()
-            else:
-                Log.info("Chess960: No strengths available for selection")
+                self._init_position_input()
 
         elif self._menu_state == "color":
             self._selected_color = chess.WHITE if self._current_index == 0 else chess.BLACK
             Log.info(f"Chess960: Selected color: {'WHITE' if self._selected_color == chess.WHITE else 'BLACK'}")
             self._menu_state = None  # Exit menu, start game
-            Log.info(f"Chess960: Starting game...")
             self._start_selected_game()
 
     def _get_keyboard_array(self):
@@ -486,12 +447,9 @@ class Chess960(Plugin):
         self._prev_cursor_pos = self._cursor_pos
 
     def _position_field_callback(self, field_index, action):
-        Log.info(f"PLACE on field {field_index}, action {action}")
         if action != Enums.PieceAction.PLACE or field_index not in self._ziffer_map:
-            Log.info(f"Ignored: action={action}, field in map={field_index in self._ziffer_map}")
             return
         ziffer = self._ziffer_map[field_index]
-        Log.info(f"Setting ziffer {ziffer} at cursor {self._cursor_pos}")
         self._input_str[self._cursor_pos] = ziffer
         Centaur.sound(Enums.Sound.CORRECT_MOVE)
 
@@ -510,7 +468,6 @@ class Chess960(Plugin):
         self._cursor_pos = (self._cursor_pos + 1) % 3
 
         self._update_pos_display()
-        Log.info(f"Pos updated: {''.join(self._input_str)}, cursor={self._cursor_pos}")
 
     def _position_key_callback(self, key):
         if key == Enums.Btn.PLAY:
@@ -556,8 +513,12 @@ class Chess960(Plugin):
 
     def _start_selected_game(self):
         """Start the game with selected parameters"""
+        # Wait for test-engine to fully release resources before starting game engine
+        # This prevents UCI timeout caused by blocked engine binary
+        time.sleep(1.0)
+        
         # Use selected position if available, else random
-        if not hasattr(self, '_chess960_fen') or not self._chess960_fen:
+        if not self._chess960_fen:
             chess960_pos = random.randint(0, 959)
             board = chess.Board.from_chess960_pos(chess960_pos)
             self._chess960_fen = board.fen()
@@ -609,15 +570,12 @@ class Chess960(Plugin):
     # time the player pushes a key.
     # Except the BACK key which is handled by the engine.
     def key_callback(self, key:Enums.Btn):
-        Log.info(f"Chess960: key_callback called with key={key}, menu_state={self._menu_state}")
-
         # Handle position input if in position state
         if self._menu_state == "position":
             return self._position_key_callback(key)
 
         # Handle menu navigation if we're still in menu mode
         if self._menu_state is not None:
-            Log.info(f"Chess960: Calling _handle_menu_navigation")
             return self._handle_menu_navigation(key)
 
         # If the user pushes HELP,
@@ -628,7 +586,6 @@ class Chess960(Plugin):
             return True
 
         # Key can be handled by the engine.
-        Log.info(f"Chess960: Key not handled, returning False")
         return False
 
     # When exists, this function is automatically invoked
@@ -683,10 +640,8 @@ class Chess960(Plugin):
 
     def _on_engine_move_ready(self, result):
         """Callback when Stockfish move is ready"""
-        Log.info(f"DEBUG Chess960 Engine: result={result}")
         if result and result.move:
             uci_move = result.move.uci()
-            Log.info(f"DEBUG Chess960 Engine UCI: '{uci_move}' (promo={len(uci_move)>4})")
             Centaur.play_computer_move(uci_move)
         else:
             Log.info("Chess960: Engine error - no move available")
@@ -695,24 +650,18 @@ class Chess960(Plugin):
      # When exists, this function is automatically invoked
      # at start, after splash screen, on PLAY button.
     def on_start_callback(self, key:Enums.Btn) -> bool:
-        Log.info(f"Chess960: on_start_callback called with key={key}")
-
         # HELP key starts the castling tutorial
         if key == Enums.Btn.HELP:
-            Log.info(f"Chess960: HELP pressed, starting tutorial")
             self._start_tutorial()
             return False  # Stay in pre-start mode (splash screen state)
 
         # Start the menu system
         if key == Enums.Btn.PLAY:
-            Log.info(f"Chess960: Setting menu_state to 'engine'")
             self._menu_state = "engine"  # Now activate menu
             self._ignore_next_play = True  # Ignore the next PLAY event
             self._update_menu_display()
-            Log.info(f"Chess960: Returning True from on_start_callback")
             return True  # Plugin is now started, menu is active
 
-        Log.info(f"Chess960: Returning False from on_start_callback")
         return False
 
     # -------------------------------------------------------------------------
@@ -721,7 +670,6 @@ class Chess960(Plugin):
 
     def _start_tutorial(self):
         """Start the castling tutorial."""
-        Log.info("Chess960: Starting castling tutorial")
         tutorial = Chess960Tutorial(self)
         tutorial.start()
 
