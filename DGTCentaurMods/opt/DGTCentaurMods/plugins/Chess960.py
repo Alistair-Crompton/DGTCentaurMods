@@ -165,6 +165,7 @@ class Chess960(Plugin):
     def _load_engine_strengths(self, uci_path):
         """Load strength levels from UCI file"""
         parser = configparser.ConfigParser()
+        parser.optionxform = str
         parser.read(uci_path)
 
         self._strengths = list(parser.sections())
@@ -536,6 +537,7 @@ class Chess960(Plugin):
         config = {}
         if self._selected_strength != "DEFAULT":
             parser = configparser.ConfigParser()
+            parser.optionxform = str
             parser.read(self._selected_engine['uci_path'])
             if parser.has_section(self._selected_strength):
                 for key, value in parser.items(self._selected_strength):
@@ -560,7 +562,7 @@ class Chess960(Plugin):
             white=white_player,
             black=black_player,
             flags=Enums.BoardOption.CAN_UNDO_MOVES | Enums.BoardOption.CAN_FORCE_MOVES,
-            chess_engine=None,
+            chess_engine=Centaur._chess_engine,
             custom_fen=self._chess960_fen
         )
 
