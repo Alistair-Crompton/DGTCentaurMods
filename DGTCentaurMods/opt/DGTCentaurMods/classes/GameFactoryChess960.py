@@ -62,6 +62,10 @@ class PieceHandler:
         # Castling adjustment tracking
         self._last_move_was_castling = False
 
+        # Rochade pending state
+        self._rochade_pending = False
+        self._pending_targets = set()
+
         # Local to a single field event
         self._web_move: bool = False
 
@@ -134,10 +138,21 @@ class PieceHandler:
         if len(self._chessboard.move_stack) == 0:
             return False
         move = self._chessboard.pop()
-        castling_before = self._chessboard.fen().split()[2]
+        is_castling = self._chessboard.is_castling(move)
         self._chessboard.push(move)
-        castling_after = self._chessboard.fen().split()[2]
-        return castling_before != castling_after
+        return is_castling
+
+    def _show_rochade_correction_leds(self):
+        turn = self._chessboard.turn
+        king_square = self._chessboard.king(not turn)
+        rook_squares = [s for s in chess.SQUARES if self._chessboard.piece_at(s) and self._chessboard.piece_at(s).piece_type == chess.ROOK and self._chessboard.piece_at(s).color == (not turn) and abs(s - king_square) % 8 == 1]
+        Log.info("Rochade LEDs: king={}, rooks={}".format(king_square, rook_squares))
+        if rook_squares:
+            rook_square = rook_squares[0]
+            self._pending_targets = {king_square, rook_square}
+            CENTAUR_BOARD.led_array([king_square, rook_square])
+            CENTAUR_BOARD.beep(Enums.Sound.CORRECT_MOVE)
+            Log.info("Rochade-Pending: Korrigiere physisch")
 
     def _wrong_move(self) -> None:
         """Alert user to illegal move attempt"""
@@ -182,7 +197,12 @@ class PieceHandler:
 
             self._update_display()
             self._last_move_was_castling = self.was_last_move_castling()
-            self._engine._check_last_move_outcome_and_switch()
+            if self.was_last_move_castling():
+                Log.info("Move committed, castling? {}, pending? {}".format(self.was_last_move_castling(), self._rochade_pending))
+                self._rochade_pending = True
+                self._show_rochade_correction_leds()
+            if not self._rochade_pending:
+                self._engine._check_last_move_outcome_and_switch()
         else:
             # Fatal
             Log.exception(
@@ -300,6 +320,12 @@ class PieceHandler:
 
     def _takeback_move(self, show_leds: bool = False) -> bool:
         """Previous move has been taken back"""
+
+        if self._rochade_pending:
+            self._rochade_pending = False
+            CENTAUR_BOARD.leds_off()
+            Log.info("Rochade-Pending abgebrochen (Undo)")
+            return True
 
         if not self._undo_stack:
             return False
@@ -441,6 +467,7 @@ class PieceHandler:
         self._web_move = web_move
 
         if field_action == Enums.PieceAction.LIFT:
+            Log.info(f"LIFT field={field_index}")
             self._place1 = UNDEFINED_SQUARE
             if self._lift1 != UNDEFINED_SQUARE:
                 # There's no normal sequence where we would expect a
@@ -454,10 +481,35 @@ class PieceHandler:
                 # Start of new move
                 self._lift1 = field_index
         elif field_action == Enums.PieceAction.PLACE:
+            Log.info(f"PLACE field={field_index}, lift1={self._lift1}")
 
             # If the state was not OK, we check again.
             if self._engine._invalid_board_state:
                 self._engine._update_board_state(self._web_move)
+
+            if self._rochade_pending:
+                Log.info(f"PLACE field={field_index}, targets={self._pending_targets}")
+                if field_index in self._pending_targets:
+                    Log.info(f"Removed {field_index}, remaining {self._pending_targets}")
+                    self._pending_targets.remove(field_index)
+                    if not self._pending_targets:
+                        Log.info("MATCH! Engine switch")
+                        self._rochade_pending = False
+                        CENTAUR_BOARD.leds_off()
+                        CENTAUR_BOARD.beep(Enums.Sound.CORRECT_MOVE)
+                        self._engine._check_last_move_outcome_and_switch()
+                        self._lift1 = UNDEFINED_SQUARE
+                        return True
+                    else:
+                        Log.info(f"Remaining targets: {self._pending_targets}")
+                        CENTAUR_BOARD.led_array(list(self._pending_targets))
+                        self._lift1 = UNDEFINED_SQUARE
+                        return True
+                else:
+                    CENTAUR_BOARD.beep(Enums.Sound.WRONG_MOVE)
+                    CENTAUR_BOARD.led_array(list(self._pending_targets))
+                    self._lift1 = UNDEFINED_SQUARE
+                    return True
 
             if self._lift1 == UNDEFINED_SQUARE:
                 # A PLACE action with no corresponding LIFT is
@@ -1112,6 +1164,9 @@ class Engine():
     def _update_board_state(self, web_move:bool):
 
         if not self._started or web_move:
+            return
+
+        if self._piece_handler._rochade_pending:
             return
 
         board_state = CENTAUR_BOARD.get_board_state()
