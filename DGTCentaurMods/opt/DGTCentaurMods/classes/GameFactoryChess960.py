@@ -59,12 +59,13 @@ class PieceHandler:
         self._takeback_in_progress = False
         self._takeback_from_square = UNDEFINED_SQUARE
 
-        # Castling adjustment tracking
-        self._last_move_was_castling = False
 
-        # Rochade pending state
-        self._rochade_pending = False
-        self._pending_targets = set()
+
+        # Unified correction state for both Rochade and Rochade-Takeback.
+        # _correction_on_done is set by the activator to distinguish the two cases.
+        self._correction_pending = False
+        self._correction_targets = set()
+        self._correction_on_done = None
 
         # Local to a single field event
         self._web_move: bool = False
@@ -142,17 +143,13 @@ class PieceHandler:
         self._chessboard.push(move)
         return is_castling
 
-    def _show_rochade_correction_leds(self):
-        turn = self._chessboard.turn
-        king_square = self._chessboard.king(not turn)
-        rook_squares = [s for s in chess.SQUARES if self._chessboard.piece_at(s) and self._chessboard.piece_at(s).piece_type == chess.ROOK and self._chessboard.piece_at(s).color == (not turn) and abs(s - king_square) % 8 == 1]
-        Log.info("Rochade LEDs: king={}, rooks={}".format(king_square, rook_squares))
-        if rook_squares:
-            rook_square = rook_squares[0]
-            self._pending_targets = {king_square, rook_square}
-            CENTAUR_BOARD.led_array([king_square, rook_square])
-            CENTAUR_BOARD.beep(Enums.Sound.CORRECT_MOVE)
-            Log.info("Rochade-Pending: Korrigiere physisch")
+    def _activate_correction(self, targets: set, on_done) -> None:
+        """Activate the unified correction state for Rochade or Rochade-Takeback."""
+        self._correction_pending = True
+        self._correction_targets = targets
+        self._correction_on_done = on_done
+        CENTAUR_BOARD.led_array(list(targets))
+        CENTAUR_BOARD.beep(Enums.Sound.CORRECT_MOVE)
 
     def _wrong_move(self) -> None:
         """Alert user to illegal move attempt"""
@@ -196,12 +193,21 @@ class PieceHandler:
                 CENTAUR_BOARD.led(self._place1)
 
             self._update_display()
-            self._last_move_was_castling = self.was_last_move_castling()
-            if self.was_last_move_castling():
-                Log.info("Move committed, castling? {}, pending? {}".format(self.was_last_move_castling(), self._rochade_pending))
-                self._rochade_pending = True
-                self._show_rochade_correction_leds()
-            if not self._rochade_pending:
+            if self._undo_stack and self._undo_stack[-1].get('is_castling', False):
+                # Rochade: find King and Rook target squares on the post-castling board
+                turn = self._chessboard.turn
+                king_square = self._chessboard.king(not turn)
+                rook_squares = [s for s in chess.SQUARES
+                                if self._chessboard.piece_at(s)
+                                and self._chessboard.piece_at(s).piece_type == chess.ROOK
+                                and self._chessboard.piece_at(s).color == (not turn)
+                                and abs(s - king_square) % 8 == 1]
+                if rook_squares:
+                    self._activate_correction(
+                        targets={king_square, rook_squares[0]},
+                        on_done=self._engine._check_last_move_outcome_and_switch
+                    )
+            if not self._correction_pending:
                 self._engine._check_last_move_outcome_and_switch()
         else:
             # Fatal
@@ -258,8 +264,9 @@ class PieceHandler:
             move = chess.Move.from_uci(uci_move)
             self._chessboard.push(move)
             san_move = self._engine.last_san_move
-            # Store in undo stack
-            self._undo_stack.append({'fen_before': fen_before, 'move': uci_move})
+            # Store in undo stack (is_castling needed for takeback after set_fen clears move_stack)
+            is_castling = self.was_last_move_castling()
+            self._undo_stack.append({'fen_before': fen_before, 'move': uci_move, 'is_castling': is_castling})
             return self._accept_move(uci_move, san_move)
         except Exception as e:
             self._wrong_move()
@@ -313,18 +320,33 @@ class PieceHandler:
 
     def _is_takeback(self) -> bool:
         """Is this an attempt to take back a move?"""
-        if self._last_move_was_castling and self._move_name() == self._undo_name():
-            return False
         return self._can_undo_moves and \
             self._move_name() == self._undo_name()
 
-    def _takeback_move(self, show_leds: bool = False) -> bool:
+    def _takeback_move(self, show_leds: bool = False, skip_castling_check: bool = False) -> bool:
         """Previous move has been taken back"""
 
-        if self._rochade_pending:
-            self._rochade_pending = False
+        if self._correction_pending:
+            # Correction already in progress (Rochade or Takeback-Rochade) - cancel it
+            self._correction_pending = False
+            self._correction_targets = set()
+            self._correction_on_done = None
             CENTAUR_BOARD.leds_off()
-            Log.info("Rochade-Pending abgebrochen (Undo)")
+            return True
+
+        # Rochade-Takeback: uses is_castling flag from undo_stack.
+        # Works in all scenarios: direct takeback after castling AND takeback after engine move.
+        if not skip_castling_check and self._undo_stack and self._undo_stack[-1].get('is_castling', False):
+            previous_state = self._undo_stack[-1]  # Peek only - do NOT pop yet
+            previous_uci_move = previous_state['move']
+            king_from = common.Converters.to_square_index(previous_uci_move, Enums.SquareType.ORIGIN)
+            rook_from = common.Converters.to_square_index(previous_uci_move, Enums.SquareType.TARGET)
+            # Show PRE-castling position so player sees where König and Turm need to go
+            SCREEN.draw_fen(previous_state['fen_before'], startrow=1.6)
+            self._activate_correction(
+                targets={king_from, rook_from},
+                on_done=lambda: self._takeback_move(show_leds=False, skip_castling_check=True)
+            )
             return True
 
         if not self._undo_stack:
@@ -375,8 +397,6 @@ class PieceHandler:
 
         self._engine.update_evaluation()
 
-        self._last_move_was_castling = False
-
         return True
 
 
@@ -416,19 +436,16 @@ class PieceHandler:
         if self._takeback_in_progress:
             if self._place1 == self._takeback_from_square:
                 # Piece has been moved back to start position - complete takeback
+                CENTAUR_BOARD.beep(Enums.Sound.CORRECT_MOVE)
                 CENTAUR_BOARD.leds_off()
                 self._takeback_in_progress = False
                 self._takeback_from_square = UNDEFINED_SQUARE
-                self._engine.update_web_ui({
-                    "takeback_in_progress": False,
-                    "takeback_completed": True,
-                    "uci_move": None,
-                })
                 # After takeback completion, trigger engine if it's computer's turn
                 self._engine._check_last_move_outcome_and_switch()
                 result = True
             else:
-                # Ignore other actions during takeback
+                # Wrong square during takeback
+                CENTAUR_BOARD.beep(Enums.Sound.WRONG_MOVE)
                 result = False
         else:
             # Normal event processing - Chess960 castling is now handled by standard moves
@@ -467,7 +484,7 @@ class PieceHandler:
         self._web_move = web_move
 
         if field_action == Enums.PieceAction.LIFT:
-            Log.info(f"LIFT field={field_index}")
+            Log.info(f"LIFT field={field_index}, piece={self._chessboard.piece_at(field_index)}")
             self._place1 = UNDEFINED_SQUARE
             if self._lift1 != UNDEFINED_SQUARE:
                 # There's no normal sequence where we would expect a
@@ -481,35 +498,30 @@ class PieceHandler:
                 # Start of new move
                 self._lift1 = field_index
         elif field_action == Enums.PieceAction.PLACE:
-            Log.info(f"PLACE field={field_index}, lift1={self._lift1}")
+            Log.info(f"PLACE field={field_index}, piece={self._chessboard.piece_at(field_index)}, lift1={self._lift1}")
 
             # If the state was not OK, we check again.
             if self._engine._invalid_board_state:
                 self._engine._update_board_state(self._web_move)
 
-            if self._rochade_pending:
-                Log.info(f"PLACE field={field_index}, targets={self._pending_targets}")
-                if field_index in self._pending_targets:
-                    Log.info(f"Removed {field_index}, remaining {self._pending_targets}")
-                    self._pending_targets.remove(field_index)
-                    if not self._pending_targets:
-                        Log.info("MATCH! Engine switch")
-                        self._rochade_pending = False
+            if self._correction_pending:
+                if field_index in self._correction_targets:
+                    self._correction_targets.remove(field_index)
+                    CENTAUR_BOARD.beep(Enums.Sound.CORRECT_MOVE)
+                    if not self._correction_targets:
+                        # All pieces placed - execute the stored callback
+                        self._correction_pending = False
                         CENTAUR_BOARD.leds_off()
-                        CENTAUR_BOARD.beep(Enums.Sound.CORRECT_MOVE)
-                        self._engine._check_last_move_outcome_and_switch()
-                        self._lift1 = UNDEFINED_SQUARE
-                        return True
+                        self._correction_on_done()
                     else:
-                        Log.info(f"Remaining targets: {self._pending_targets}")
-                        CENTAUR_BOARD.led_array(list(self._pending_targets))
-                        self._lift1 = UNDEFINED_SQUARE
-                        return True
+                        # One piece placed - show remaining LED
+                        CENTAUR_BOARD.leds_off()
+                        CENTAUR_BOARD.led_array(list(self._correction_targets))
                 else:
                     CENTAUR_BOARD.beep(Enums.Sound.WRONG_MOVE)
-                    CENTAUR_BOARD.led_array(list(self._pending_targets))
-                    self._lift1 = UNDEFINED_SQUARE
-                    return True
+                    CENTAUR_BOARD.led_array(list(self._correction_targets))
+                self._lift1 = UNDEFINED_SQUARE
+                return True
 
             if self._lift1 == UNDEFINED_SQUARE:
                 # A PLACE action with no corresponding LIFT is
@@ -1166,7 +1178,7 @@ class Engine():
         if not self._started or web_move:
             return
 
-        if self._piece_handler._rochade_pending:
+        if self._piece_handler._correction_pending:
             return
 
         board_state = CENTAUR_BOARD.get_board_state()
