@@ -1,5 +1,5 @@
----
-on: [push]
+on: [push]   # oder [push: tags] – je nachdem, was du willst; push triggert bei jedem Commit, für Releases besser tags nutzen
+
 jobs:
   package:
     runs-on: ubuntu-latest
@@ -8,10 +8,16 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20.x"
-      - run: make
-      - uses: actions/upload-artifact@v3
+
+      - run: make   # ← hier wird das .deb gebaut – stelle sicher, dass make wirklich eine .deb in releases/ erzeugt!
+
+      - uses: actions/upload-artifact@v4
         with:
-          path: releases/*.deb
+          name: dgta-centaur-deb          # ← NEU: Muss angegeben werden!
+          path: releases/*.deb            # dein Glob-Pattern ist ok
+          if-no-files-found: warn         # optional: warn statt error, falls mal keine .deb da ist
+          # retention-days: 5             # optional, falls du die Artefakte länger behalten willst
