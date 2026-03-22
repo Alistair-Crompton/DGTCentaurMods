@@ -1,15 +1,18 @@
 name: Build and Release DGTCentaurMods .deb
 
 on:
-  push:
-    tags:
-      - 'A.alpha-*'      # Matches original repo style (e.g. A.alpha-ONxxxxxx or A.alpha-chemtech-xxxxxx)
-      - 'A.beta-*'       # Optional: add more patterns if needed
-      # If you want to trigger on ANY tag, change to: tags: ['*']
+  release:
+    types: [published]           # Nur wenn du „Publish release“ klickst
+
+  # Optional: zum manuellen Testen (Actions-Tab → Run workflow)
+  workflow_dispatch:
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write            # Wichtig für Release-Asset-Uploads
 
     steps:
       - name: Checkout repository
@@ -21,8 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20.x'   # Keep at 20.x if your project requires it; change to '24.x' if compatible
-          # cache: 'npm'         # Uncomment if you use npm/yarn
+          node-version: '20.x'
 
       - name: Build the .deb package
         run: make
@@ -32,20 +34,18 @@ jobs:
           ls -la releases/ || echo "No files found in releases/ - check make output!"
           find . -name "*.deb" || true
 
-      - name: Upload .deb as workflow artifact (for debugging)
+      - name: Upload .deb as workflow artifact (debug fallback)
         uses: actions/upload-artifact@v7
         with:
           name: dgta-centaur-deb
           path: releases/*.deb
           if-no-files-found: warn
 
-      - name: Upload .deb to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Upload .deb to this GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: releases/*.deb
           generate_release_notes: true
-          # prerelease: true     # Uncomment if you want pre-releases
-          # body: "Custom changes in chemtech fork..."   # Optional custom text
+          # prerelease: true   # falls du Pre-Releases willst
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
