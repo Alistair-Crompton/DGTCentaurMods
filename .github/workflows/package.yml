@@ -1,51 +1,23 @@
-name: Build and Release DGTCentaurMods .deb
-
-on:
-  push:
-    tags:
-      - 'A.alpha-*'      # Matches original repo style (e.g. A.alpha-ONxxxxxx or A.alpha-chemtech-xxxxxx)
-      - 'A.beta-*'       # Optional: add more patterns if needed
-      # If you want to trigger on ANY tag, change to: tags: ['*']
+on: [push]   # oder [push: tags] – je nachdem, was du willst; push triggert bei jedem Commit, für Releases besser tags nutzen
 
 jobs:
-  build-and-release:
+  package:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20.x'   # Keep at 20.x if your project requires it; change to '24.x' if compatible
-          # cache: 'npm'         # Uncomment if you use npm/yarn
+          node-version: "20.x"
 
-      - name: Build the .deb package
-        run: make
+      - run: make   # ← hier wird das .deb gebaut – stelle sicher, dass make wirklich eine .deb in releases/ erzeugt!
 
-      - name: Debug - List built files
-        run: |
-          ls -la releases/ || echo "No files found in releases/ - check make output!"
-          find . -name "*.deb" || true
-
-      - name: Upload .deb as workflow artifact (for debugging)
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         with:
-          name: dgta-centaur-deb
-          path: releases/*.deb
-          if-no-files-found: warn
-
-      - name: Upload .deb to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: releases/*.deb
-          generate_release_notes: true
-          # prerelease: true     # Uncomment if you want pre-releases
-          # body: "Custom changes in chemtech fork..."   # Optional custom text
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: dgta-centaur-deb          # ← NEU: Muss angegeben werden!
+          path: releases/*.deb            # dein Glob-Pattern ist ok
+          if-no-files-found: warn         # optional: warn statt error, falls mal keine .deb da ist
+          # retention-days: 5             # optional, falls du die Artefakte länger behalten willst
