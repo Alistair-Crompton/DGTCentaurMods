@@ -1,37 +1,50 @@
 name: Build and Release DGTCentaurMods .deb
 
 on:
-  push:
-    tags:
-      - 'A.alpha-*'
-      - 'A.beta-*'
+  release:
+    types: [published]           # Nur wenn du „Publish release“ klickst
+
+  # Optional: zum manuellen Testen (Actions-Tab → Run workflow)
+  workflow_dispatch:
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+
     permissions:
-      contents: write
+      contents: write            # Wichtig für Release-Asset-Uploads
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
           node-version: '20.x'
 
       - name: Build the .deb package
-        run: |
-          make
-          ls -la releases/ || echo "releases/ folder not found or empty!"
+        run: make
 
-      - name: Upload .deb to Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Debug - List built files
+        run: |
+          ls -la releases/ || echo "No files found in releases/ - check make output!"
+          find . -name "*.deb" || true
+      - name: Upload .deb as workflow artifact (debug fallback)
+        uses: actions/upload-artifact@v7
+        with:
+          name: dgta-centaur-deb
+          path: releases/*.deb
+          if-no-files-found: warn
+
+      - name: Upload .deb to this GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: releases/*.deb
           generate_release_notes: true
+          # prerelease: true   # falls du Pre-Releases willst
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
