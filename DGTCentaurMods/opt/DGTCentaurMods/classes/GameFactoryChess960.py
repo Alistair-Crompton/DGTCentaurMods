@@ -177,6 +177,7 @@ class PieceHandler:
 
     def _commit_move(self, uci_move: str, san_move: str) -> None:
         if self._dal.insert_new_game_move(uci_move, str(self._fen())):
+            self._engine._invalid_board_state = False
             self._engine._computer_move_is_ready = False
             self._engine._san_move_list.append(san_move)
             
@@ -533,8 +534,8 @@ class PieceHandler:
             # Always interpret actions (allow takeback even if board invalid)
             result = self._interpret_actions()
 
-            # If board was invalid, warn user
-            if self._engine._invalid_board_state:
+            # If board was invalid AND move was not successfully processed, warn user
+            if self._engine._invalid_board_state and not result:
                 CENTAUR_BOARD.beep(Enums.Sound.WRONG_MOVE)
 
             return result
