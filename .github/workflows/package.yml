@@ -1,17 +1,45 @@
----
-on: [push]
+name: Build and Release DGTCentaurMods .deb
+
+# Trigger the workflow when a release is published via GitHub web interface
+on:
+  release:
+    types: [published]
+
+  # Allows manual triggering from the Actions tab (useful for testing)
+  workflow_dispatch:
+
 jobs:
-  package:
+  build-and-release:
     runs-on: ubuntu-latest
+
+    # Required permission to upload files to a release
+    permissions:
+      contents: write
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
-      - uses: actions/setup-node@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          node-version: "20.x"
-      - run: make
-      - uses: actions/upload-artifact@v3
+          node-version: '20.x'
+
+      - name: Build the .deb package
+        run: make
+
+      - name: Debug - List built files
+        run: |
+          ls -la releases/ || echo "No .deb files found in releases/!"
+          find . -name "*.deb" || true
+
+      - name: Upload .deb to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          path: releases/*.deb
+          files: releases/*.deb
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
