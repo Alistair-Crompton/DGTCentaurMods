@@ -2,7 +2,8 @@
 .PHONY: all clean distclean package release stage
 
 basename := DGTCentaurMods
-version  := $(shell git describe --abbrev=0 --tags | tr --delete [A-Z])
+version  ?= $(shell git describe --abbrev=0 --tags | tr --delete [A-Z])
+version  := $(shell printf '%s' "$(version)" | sed -E 's/^[^0-9]+//')
 package  := $(basename)_A.alpha-ON$(version)
 tmp      := $(shell mktemp -d)
 stage    := $(tmp)/$(package)
