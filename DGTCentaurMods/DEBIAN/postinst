@@ -128,7 +128,7 @@ echo -e "::: Creating python virtual environment."
         fi
     fi
 
-echo -e "::: Installing python packages into virtual environment."
+echo -e "::: Installing pip-only python packages into virtual environment."
     "${VENV_PATH}/bin/python" -m pip install --upgrade pip setuptools wheel
     CFLAGS="-fcommon" "${VENV_PATH}/bin/pip" install -r $DGTCM_PATH/config/pip-requirements.txt
     if [ $? -ne 0 ]
