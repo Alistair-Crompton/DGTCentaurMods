@@ -11,6 +11,7 @@ STOCKFISH="stockfish_pi"
 RODENT_REPO="https://github.com/nescitus/rodent-iv.git"
 MAIA_REPO="https://github.com/CSSLab/maia-chess.git"
 FENLOG="/home/pi/centaur/fen.log"
+VENV_PATH="${DGTCM_PATH}/.venv"
 
 
 if ! cat $CONFIG | grep -q "#dgtcentaurmods"
@@ -108,18 +109,27 @@ then
     touch $FENLOG
 fi
 
-# Check if pip is installed
-if sudo dpkg -l | grep -q python3-pip
-then
-    echo "::: Pip is installed."
-else
-    echo "::: Pip not installed. Installing now..."
-    sudo apt-get install -y python3-pip
-fi
-
-echo -e "::: Installing python packages."
+echo -e "::: Creating python virtual environment."
     cd $DGTCM_PATH
-    CFLAGS="-fcommon" pip3 install -r $DGTCM_PATH/config/pip-requirements.txt
+
+    if [ ! -d "${VENV_PATH}" ]
+    then
+        python3 -m venv "${VENV_PATH}"
+        if [ $? -ne 0 ]
+        then
+            echo "::: ERROR: Failed to create virtual environment at ${VENV_PATH}."
+            exit 1
+        fi
+    fi
+
+echo -e "::: Installing python packages into virtual environment."
+    "${VENV_PATH}/bin/python" -m pip install --upgrade pip setuptools wheel
+    CFLAGS="-fcommon" "${VENV_PATH}/bin/pip" install -r $DGTCM_PATH/config/pip-requirements.txt
+    if [ $? -ne 0 ]
+    then
+        echo "::: ERROR: Python dependency installation failed in virtual environment."
+        exit 1
+    fi
 
 
 function insertMaia {
