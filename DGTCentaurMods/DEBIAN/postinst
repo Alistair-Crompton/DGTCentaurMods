@@ -65,13 +65,28 @@ cd /usr/lib/python3/dist-packages && sudo ln -s ${DGTCM_PATH} ${PACKAGE}
 sudo touch /etc/authbind/byport/80
 sudo chmod 777 /etc/authbind/byport/80
 
+function enableTimeSyncService {
+    # Keep system time sane for TLS/API interactions without forcing a specific daemon.
+    for service in systemd-timesyncd ntpsec ntp chrony
+    do
+        if systemctl list-unit-files "${service}.service" 2>/dev/null | grep -q "^${service}.service"
+        then
+            echo -e "::: Enabling time sync service: ${service}."
+            systemctl enable "${service}.service" >/dev/null 2>&1 || true
+            return
+        fi
+    done
+
+    echo -e "::: No known time sync service found. Skipping enable step."
+}
+
 # Enable systemd services.
 echo -e "::: Setup services."
     systemctl daemon-reload
     systemctl enable ${PACKAGE}Web.service
     systemctl enable ${PACKAGE}Update.service
     systemctl enable ${PACKAGE}.service
-    systemctl enable ntp
+    enableTimeSyncService
 
 systemctl daemon-reload
 
