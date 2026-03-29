@@ -5,7 +5,7 @@ After=network.target DGTCentaurModsWeb.service
 [Service]
 Environment=PYTHONUNBUFFERED=1
 ExecStartPre=/bin/sleep 4
-ExecStart=python3 main.py
+ExecStart=/opt/DGTCentaurMods/.venv/bin/python main.py
 WorkingDirectory=/opt/DGTCentaurMods
 Environment="PYTHONPATH=/opt"
 Restart=no
