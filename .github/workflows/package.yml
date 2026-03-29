@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Tag to create/use for the release (example: v1.2.3)"
+        description: "Tag to create/use for the release (example: 1.0.0)"
         required: true
         type: string
       release_name:
