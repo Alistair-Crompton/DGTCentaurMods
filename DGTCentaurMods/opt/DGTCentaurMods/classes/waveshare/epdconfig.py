@@ -147,8 +147,29 @@ class JetsonNano:
         self.GPIO.cleanup()
 
 
-if os.path.exists('/sys/bus/platform/drivers/gpiomem-bcm2835'):
-    implementation = RaspberryPi()
+def _is_raspberry_pi():
+    # Newer kernels/images may not expose the legacy gpiomem-bcm2835 path.
+    if os.path.exists("/sys/bus/platform/drivers/gpiomem-bcm2835"):
+        return True
+    if os.path.exists("/dev/gpiomem"):
+        return True
+    model_path = "/proc/device-tree/model"
+    if os.path.exists(model_path):
+        try:
+            with open(model_path, "rb") as model_file:
+                model = model_file.read().decode("utf-8", errors="ignore").lower()
+            return "raspberry pi" in model
+        except Exception:
+            pass
+    return False
+
+
+if _is_raspberry_pi():
+    try:
+        implementation = RaspberryPi()
+    except Exception:
+        # Fallback to Jetson backend only when Pi backend cannot be initialized.
+        implementation = JetsonNano()
 else:
     implementation = JetsonNano()
 

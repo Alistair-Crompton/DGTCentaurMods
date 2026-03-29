@@ -1,10 +1,20 @@
 #!/bin/bash
 
 ARCH=`uname -m`
-CONFIG="/boot/config.txt"
+if [ -f /boot/firmware/config.txt ]
+then
+    CONFIG="/boot/firmware/config.txt"
+else
+    CONFIG="/boot/config.txt"
+fi
 PACKAGE="DGTCentaurMods"
 DGTCM_PATH="/opt/${PACKAGE}"
-CMDLINEFILE="/boot/cmdline.txt"
+if [ -f /boot/firmware/cmdline.txt ]
+then
+    CMDLINEFILE="/boot/firmware/cmdline.txt"
+else
+    CMDLINEFILE="/boot/cmdline.txt"
+fi
 CENTAUR="/home/pi/centaur/"
 CENTAUR_ENGINE="/home/pi/centaur/engines"
 STOCKFISH="stockfish_pi"
@@ -112,20 +122,17 @@ fi
 echo -e "::: Creating python virtual environment."
     cd $DGTCM_PATH
 
-    # Recreate an existing venv if it was created without system-site-packages.
-    if [ -f "${VENV_PATH}/pyvenv.cfg" ] && ! grep -q "include-system-site-packages = true" "${VENV_PATH}/pyvenv.cfg"
+    # Always recreate venv to avoid stale pip packages surviving upgrades.
+    if [ -d "${VENV_PATH}" ]
     then
         rm -rf "${VENV_PATH}"
     fi
 
-    if [ ! -d "${VENV_PATH}" ]
+    python3 -m venv --system-site-packages "${VENV_PATH}"
+    if [ $? -ne 0 ]
     then
-        python3 -m venv --system-site-packages "${VENV_PATH}"
-        if [ $? -ne 0 ]
-        then
-            echo "::: ERROR: Failed to create virtual environment at ${VENV_PATH}."
-            exit 1
-        fi
+        echo "::: ERROR: Failed to create virtual environment at ${VENV_PATH}."
+        exit 1
     fi
 
 echo -e "::: Installing pip-only python packages into virtual environment."
