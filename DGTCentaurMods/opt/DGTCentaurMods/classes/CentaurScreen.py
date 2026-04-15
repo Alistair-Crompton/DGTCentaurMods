@@ -63,6 +63,7 @@ class CentaurScreen(common.Singleton):
 
     _screen_reversed = False
     _screen_enabled = True
+    _hardware_available = False
 
     _battery_value = -1 # -1 means "charging"
 
@@ -78,17 +79,21 @@ class CentaurScreen(common.Singleton):
 
             self._buffer = Image.new(B_W_MODE, (SCREEN_WIDTH, SCREEN_HEIGHT), 255)
 
-            self._api.init()
-
-            self._api.Clear()
-
-            self.home_screen("Welcome!")
+            try:
+                if self._api.init() == 0:
+                    self._hardware_available = True
+                    self._api.Clear()
+                    self.home_screen("Welcome!")
+                    print("Centaur screen initialized.")
+                else:
+                    print("Centaur screen hardware initialization failed (check connections).")
+            except Exception as e:
+                Log.exception(CentaurScreen.initialize, e)
+                print(f"Centaur screen driver error: {e}")
 
             self.screen_thread_worker = threading.Thread(target=self._screen_thread, args=())
             self.screen_thread_worker.daemon = True
             self.screen_thread_worker.start()
-
-            print("Centaur screen initialized.")
 
         return self
     
@@ -110,7 +115,11 @@ class CentaurScreen(common.Singleton):
 
     def _screen_thread(self):
 
-        self._api.display(self._api.getbuffer(self._buffer))
+        if self._hardware_available:
+            try:
+                self._api.display(self._api.getbuffer(self._buffer))
+            except Exception as e:
+                Log.exception(CentaurScreen._screen_thread, e)
 
         time.sleep(3)
         
@@ -155,7 +164,11 @@ class CentaurScreen(common.Singleton):
                     if self._screen_reversed == False:
                         buffer_copy = buffer_copy.rotate(180, expand=True)
                     
-                    self._api.DisplayPartial(self._api.getbuffer(buffer_copy))
+                    if self._hardware_available:
+                        try:
+                            self._api.DisplayPartial(self._api.getbuffer(buffer_copy))
+                        except Exception as e:
+                            Log.exception(CentaurScreen._screen_thread, e)
                 
                     self._last_buffer_bytes = buffer_bytes
 

@@ -42,17 +42,37 @@ class RaspberryPi:
 
     def __init__(self):
         import spidev
-        import RPi.GPIO
-
-        self.GPIO = RPi.GPIO
         self.SPI = spidev.SpiDev()
-        self.GPIO.setwarnings(False)
+        self.GPIO = None
+        self.lgpio = None
+        self.chip = None
+        
+        # Try RPi.GPIO first
+        try:
+            import RPi.GPIO
+            self.GPIO = RPi.GPIO
+            self.GPIO.setwarnings(False)
+        except ImportError:
+            pass
+            
+        # Try lgpio as fallback or for direct usage
+        try:
+            import lgpio
+            self.lgpio = lgpio
+        except ImportError:
+            pass
 
     def digital_write(self, pin, value):
-        self.GPIO.output(pin, value)
+        if self.chip is not None and self.lgpio:
+            self.lgpio.gpio_write(self.chip, pin, value)
+        elif self.GPIO:
+            self.GPIO.output(pin, value)
 
     def digital_read(self, pin):
-        return self.GPIO.input(pin)
+        if self.chip is not None and self.lgpio:
+            return self.lgpio.gpio_read(self.chip, pin)
+        elif self.GPIO:
+            return self.GPIO.input(pin)
 
     def delay_ms(self, delaytime):
         time.sleep(delaytime / 1000.0)
@@ -64,17 +84,57 @@ class RaspberryPi:
         self.SPI.writebytes2(data)
 
     def module_init(self):
-        self.GPIO.setmode(self.GPIO.BCM)
-        self.GPIO.setwarnings(False)
-        self.GPIO.setup(self.RST_PIN, self.GPIO.OUT)
-        self.GPIO.setup(self.DC_PIN, self.GPIO.OUT)
-        self.GPIO.setup(self.CS_PIN, self.GPIO.OUT)
-        self.GPIO.setup(self.BUSY_PIN, self.GPIO.IN)
+        
+        success = False
+        if self.GPIO:
+            try:
+                self.GPIO.setmode(self.GPIO.BCM)
+                self.GPIO.setwarnings(False)
+                self.GPIO.setup(self.RST_PIN, self.GPIO.OUT)
+                self.GPIO.setup(self.DC_PIN, self.GPIO.OUT)
+                self.GPIO.setup(self.CS_PIN, self.GPIO.OUT)
+                self.GPIO.setup(self.BUSY_PIN, self.GPIO.IN)
+                success = True
+            except Exception as e:
+                logging.warning(f"RPi.GPIO initialization failed: {e}. Trying lgpio fallback...")
+                # We don't return here, we try lgpio if success is False
 
-        # SPI device, bus = 0, device = 0
-        self.SPI.open(1, 0)
-        self.SPI.max_speed_hz = 4000000
-        self.SPI.mode = 0b00
+        if not success and self.lgpio:
+            try:
+                # Open gpiochip 0 (default for Pi 3/4/0) or 4 (Pi 5)
+                for chip_idx in [0, 4]:
+                    try:
+                        self.chip = self.lgpio.gpiochip_open(chip_idx)
+                        break
+                    except:
+                        continue
+                
+                if self.chip is None:
+                    raise RuntimeError("Could not open any lgpio chip")
+                
+                self.lgpio.gpio_claim_output(self.chip, self.RST_PIN)
+                self.lgpio.gpio_claim_output(self.chip, self.DC_PIN)
+                self.lgpio.gpio_claim_output(self.chip, self.CS_PIN)
+                self.lgpio.gpio_claim_input(self.chip, self.BUSY_PIN)
+                success = True
+                logging.info(f"lgpio initialized on chip {self.chip}")
+            except Exception as e:
+                logging.error(f"lgpio initialization failed: {e}")
+                return -1
+
+        if not success:
+            logging.error("No GPIO backend could be initialized!")
+            return -1
+
+        # SPI device, bus = 1, device = 0
+        try:
+            self.SPI.open(1, 0)
+            self.SPI.max_speed_hz = 4000000
+            self.SPI.mode = 0b00
+        except Exception as e:
+            logging.error(f"SPI initialization failed: {e}")
+            return -1
+            
         return 0
 
     def module_exit(self):
@@ -82,10 +142,17 @@ class RaspberryPi:
         self.SPI.close()
 
         logging.debug("close 5V, Module enters 0 power consumption ...")
-        self.GPIO.output(self.RST_PIN, 0)
-        self.GPIO.output(self.DC_PIN, 0)
+        try:
+            self.digital_write(self.RST_PIN, 0)
+            self.digital_write(self.DC_PIN, 0)
+        except:
+            pass
 
-        self.GPIO.cleanup()
+        if self.chip is not None and self.lgpio:
+            self.lgpio.gpiochip_close(self.chip)
+            self.chip = None
+        elif self.GPIO:
+            self.GPIO.cleanup()
 
 
 class JetsonNano:
