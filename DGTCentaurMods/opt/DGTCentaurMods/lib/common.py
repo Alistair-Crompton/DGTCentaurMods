@@ -112,12 +112,12 @@ def tail(f, lines=1, _buffer=4098):
 
 def get_Centaur_FEN() -> str:
     """Read board state from FEN log (default ~/centaur/fen.log),
-    returning default starting position if log does not exist."""
+    returning default starting position if log does not exist or is empty."""
 
     try:
         with open(consts.FEN_LOG, "r") as f:
-            fen = f.readline()
-        return fen
+            fen = f.readline().strip()
+        return fen or chess.STARTING_FEN
     except:
         return chess.STARTING_FEN
 

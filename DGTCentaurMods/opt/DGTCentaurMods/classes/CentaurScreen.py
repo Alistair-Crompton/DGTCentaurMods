@@ -257,35 +257,47 @@ class CentaurScreen(common.Singleton):
         self._last_written_text = ["","","",""]
 
     def draw_fen(self, fen, startrow=2):
+        """Draw a FEN string on the screen, falling back to an empty board if the string is invalid."""
 
         EMPTY_FEN = "8/8/8/8/8/8/8/8 w - - 0 1"
 
         try:
-            if fen == None:
+            # Handle None or empty string
+            if not fen:
                 fen = EMPTY_FEN
 
-            fen = fen.replace("/", "")
+            # Process FEN: remove slashes and expand digits to spaces
+            processed_fen = fen.replace("/", "")
+            for index in range(1, 10): # 1-9
+                processed_fen = processed_fen.replace(str(index), " " * index)
 
-            for index in range(1,9):
-                fen = fen.replace(str(index), " "*index)
+            # Validate processed FEN length for the piece part
+            # A valid FEN piece part should have exactly 64 characters after expansion.
+            # We check if it has AT LEAST 64 characters to be safe for full FENs.
+            if len(processed_fen) < 64:
+                Log.debug(f"Invalid FEN (too short after processing): '{fen}'")
+                fen = EMPTY_FEN
+                processed_fen = fen.replace("/", "")
+                for index in range(1, 10):
+                    processed_fen = processed_fen.replace(str(index), " " * index)
 
             if self._screen_reversed == False:
-                reversed = ""
-                for a in range(8,0,-1):
-                    for b in range(0,8):
-                        reversed = reversed + fen[((a-1)*8)+b]
-                fen = reversed
+                reversed_fen = ""
+                for a in range(8, 0, -1):
+                    for b in range(0, 8):
+                        reversed_fen = reversed_fen + processed_fen[((a - 1) * 8) + b]
+                processed_fen = reversed_fen
             else:
-                reversed = ""
-                for a in range(0,8):
-                    for b in range(0,8):
-                        reversed = reversed + fen[(a*8)+(7-b)]
-                fen = reversed
+                reversed_fen = ""
+                for a in range(0, 8):
+                    for b in range(0, 8):
+                        reversed_fen = reversed_fen + processed_fen[(a * 8) + (7 - b)]
+                processed_fen = reversed_fen
 
-            self.draw_board(fen, startrow)
+            self.draw_board(processed_fen, startrow)
 
         except Exception as e:
-            Log.debug(f"fen:{fen}")
+            Log.debug(f"Error drawing FEN: '{fen}' (processed: '{processed_fen}')")
             Log.exception(CentaurScreen.draw_fen, e)
             pass
 
