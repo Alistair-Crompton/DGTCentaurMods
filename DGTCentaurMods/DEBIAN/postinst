@@ -195,8 +195,8 @@ insertZahak
 # Setting final permissions
 function setPermissions {
     echo -e "::: Setting permissions."
-    sudo chown -R pi.pi ${DGTCM_PATH}
-    sudo chown -R pi.root $CENTAUR
+    sudo chown -R pi:pi ${DGTCM_PATH}
+    sudo chown -R pi:root $CENTAUR
     sudo usermod -aG gpio pi
 }
 
