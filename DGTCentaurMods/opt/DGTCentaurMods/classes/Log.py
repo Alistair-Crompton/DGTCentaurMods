@@ -74,6 +74,13 @@ class _Log:
             _Log.__last_info = message
 
     @staticmethod
+    def _error(source, message):
+        if _Log.__initialized == False:
+            _Log._init()
+
+        _Log.__logger.error(f"{source.__name__} -> {message}")
+
+    @staticmethod
     def _exception(source, message):
         if _Log.__initialized == False:
             _Log._init()
@@ -103,6 +110,9 @@ def last_exception() -> str:
 
 def info(message):
     _Log._info(message)
+
+def error(source, message):
+    _Log._error(source, message)
 
 def exception(source, message):
     _Log._exception(source, message)

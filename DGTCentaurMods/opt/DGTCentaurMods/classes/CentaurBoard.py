@@ -138,7 +138,7 @@ class CentaurBoard(common.Singleton):
                 time.sleep(1)
             
             if self._address_1 == 0 and self._address_2 == 0:
-                Log.exception(CentaurBoard._initialize, "No response from serial!")
+                Log.error(CentaurBoard._initialize, "No response from serial!")
                 Log.info("Board communication has been disabled...")
                 self._disabled = True
                 self._SERIAL.close()

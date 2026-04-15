@@ -3,7 +3,7 @@ Description=DGTCentaurMods web interface
 After=network.target
 
 [Service]
-ExecStart=authbind --deep /opt/DGTCentaurMods/.venv/bin/python -m flask run
+ExecStart=authbind --deep /opt/DGTCentaurMods/.venv/bin/python -m flask run --host=0.0.0.0 --port=80
 WorkingDirectory=/opt/DGTCentaurMods/web
 Environment="PYTHONPATH=/opt"
 StandardOutput=inherit
