@@ -162,10 +162,17 @@ class CentaurScreen(common.Singleton):
                 bi = "batteryc"
 
                 if self._battery_value >= 0:
-                    bi = "battery" + str(int(self._battery_value / 5))
+                    # Map 0-31 to 1-5
+                    level = int(self._battery_value / 6.2) + 1
+                    level = max(1, min(5, level))
+                    bi = f"battery{level}"
 
-                img = Image.open(consts.OPT_DIRECTORY + f"/resources/{bi}.bmp")
-                buffer_copy.paste(img,(98, 2)) 
+                try:
+                    img = Image.open(consts.OPT_DIRECTORY + f"/resources/{bi}.bmp")
+                    buffer_copy.paste(img,(98, 2)) 
+                except:
+                    # Fallback if icon is missing
+                    pass
 
                 buffer_bytes = buffer_copy.tobytes()
 
