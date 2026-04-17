@@ -92,9 +92,7 @@ class EPD:
         self.send_command(0x20) # MASTER_ACTIVATION
         self.send_command(0xFF) # TERMINATE_FRAME_READ_WRITE
         
-        logger.debug("e-Paper busy")
-        self.ReadBusy()
-        logger.debug("e-Paper busy release")  
+        self.ReadBusy()  
 
     def SetWindow(self, x_start, y_start, x_end, y_end):
         self.send_command(0x44) # SET_RAM_X_ADDRESS_START_END_POSITION
@@ -158,14 +156,12 @@ class EPD:
         pixels = image_monocolor.load()
         # logger.debug("imwidth = %d, imheight = %d",imwidth,imheight)
         if(imwidth == self.width and imheight == self.height):
-            logger.debug("Vertical")
             for y in range(imheight):
                 for x in range(imwidth):
                     # Set the bits for the column of pixels at the current position.
                     if pixels[x, y] == 0:
                         buf[int((x + y * self.width) / 8)] &= ~(0x80 >> (x % 8))
         elif(imwidth == self.height and imheight == self.width):
-            logger.debug("Horizontal")
             for y in range(imheight):
                 for x in range(imwidth):
                     newx = y
