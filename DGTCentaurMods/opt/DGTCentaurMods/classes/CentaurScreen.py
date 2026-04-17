@@ -90,10 +90,14 @@ class CentaurScreen(common.Singleton):
                     res = self._api.init(self._api.lut_full_update)
                     if res == 0:
                         self._hardware_available = True
-                        self._api.Clear()
+                        self.home_screen("Welcome!")
+                        self._api.display(self._api.getbuffer(self._buffer))
+                        
+                        import time
+                        time.sleep(3)
+                        
                         # Switch to partial update for the rest of the application
                         self._api.init(self._api.lut_partial_update)
-                        self.home_screen("Welcome!")
                         print("Centaur screen initialized (v1).")
                 else:
                     res = self._api.init()
