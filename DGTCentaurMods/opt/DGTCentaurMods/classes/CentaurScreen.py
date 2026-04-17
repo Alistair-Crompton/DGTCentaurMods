@@ -87,16 +87,23 @@ class CentaurScreen(common.Singleton):
 
             try:
                 if display_version == "v1":
-                    res = self._api.init(self._api.lut_partial_update)
+                    res = self._api.init(self._api.lut_full_update)
+                    if res == 0:
+                        self._hardware_available = True
+                        self._api.Clear()
+                        # Switch to partial update for the rest of the application
+                        self._api.init(self._api.lut_partial_update)
+                        self.home_screen("Welcome!")
+                        print("Centaur screen initialized (v1).")
                 else:
                     res = self._api.init()
+                    if res == 0:
+                        self._hardware_available = True
+                        self._api.Clear()
+                        self.home_screen("Welcome!")
+                        print("Centaur screen initialized (v2).")
 
-                if res == 0:
-                    self._hardware_available = True
-                    self._api.Clear()
-                    self.home_screen("Welcome!")
-                    print("Centaur screen initialized.")
-                else:
+                if res != 0:
                     print("Centaur screen hardware initialization failed (check connections).")
             except Exception as e:
                 Log.exception(CentaurScreen.initialize, e)
