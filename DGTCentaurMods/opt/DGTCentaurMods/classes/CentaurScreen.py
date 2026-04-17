@@ -19,7 +19,7 @@
 # This and any other notices must remain intact and unaltered in any
 # distribution, modification, variant, or derivative of this software.
 
-from DGTCentaurMods.classes.waveshare import epd2in9d
+# Import removed to support dynamic loading of the display driver
 from DGTCentaurMods.classes.CentaurConfig import CentaurConfig
 
 from DGTCentaurMods.classes import Log
@@ -63,6 +63,7 @@ class CentaurScreen(common.Singleton):
 
     _screen_reversed = False
     _screen_enabled = True
+    _hardware_available = False
 
     _battery_value = -1 # -1 means "charging"
 
@@ -74,21 +75,47 @@ class CentaurScreen(common.Singleton):
 
             print("Centaur screen initializing...")
 
-            self._api = epd2in9d.EPD()
+            display_version = CentaurConfig.get_system_settings("display_version", "v2").lower()
+            if display_version == "v1":
+                from DGTCentaurMods.classes.waveshare import epd2in9
+                self._api = epd2in9.EPD()
+            else:
+                from DGTCentaurMods.classes.waveshare import epd2in9d
+                self._api = epd2in9d.EPD()
 
             self._buffer = Image.new(B_W_MODE, (SCREEN_WIDTH, SCREEN_HEIGHT), 255)
 
-            self._api.init()
+            try:
+                if display_version == "v1":
+                    res = self._api.init(self._api.lut_full_update)
+                    if res == 0:
+                        self._hardware_available = True
+                        self.home_screen("Welcome!")
+                        self._api.display(self._api.getbuffer(self._buffer))
+                        
+                        import time
+                        time.sleep(3)
+                        
+                        # Switch to partial update for the rest of the application
+                        self._api.init(self._api.lut_partial_update)
+                        print("Centaur screen initialized (v1).")
+                else:
+                    res = self._api.init()
+                    if res == 0:
+                        self._hardware_available = True
+                        self._api.Clear()
+                        self.home_screen("Welcome!")
+                        print("Centaur screen initialized (v2).")
 
-            self._api.Clear()
-
-            self.home_screen("Welcome!")
+                if res != 0:
+                    print("Centaur screen hardware initialization failed (check connections).")
+            except Exception as e:
+                Log.exception(CentaurScreen.initialize, e)
+                print(f"Centaur screen driver error: {e}")
 
             self.screen_thread_worker = threading.Thread(target=self._screen_thread, args=())
             self.screen_thread_worker.daemon = True
             self.screen_thread_worker.start()
-
-            print("Centaur screen initialized.")
 
         return self
     
@@ -110,7 +137,11 @@ class CentaurScreen(common.Singleton):
 
     def _screen_thread(self):
 
-        self._api.display(self._api.getbuffer(self._buffer))
+        if self._hardware_available:
+            try:
+                self._api.display(self._api.getbuffer(self._buffer))
+            except Exception as e:
+                Log.exception(CentaurScreen._screen_thread, e)
 
         time.sleep(3)
         
@@ -131,10 +162,17 @@ class CentaurScreen(common.Singleton):
                 bi = "batteryc"
 
                 if self._battery_value >= 0:
-                    bi = "battery" + str(int(self._battery_value / 5))
+                    # Map 0-31 to 1-5
+                    level = int(self._battery_value / 6.2) + 1
+                    level = max(1, min(5, level))
+                    bi = f"battery{level}"
 
-                img = Image.open(consts.OPT_DIRECTORY + f"/resources/{bi}.bmp")
-                buffer_copy.paste(img,(98, 2)) 
+                try:
+                    img = Image.open(consts.OPT_DIRECTORY + f"/resources/{bi}.bmp")
+                    buffer_copy.paste(img,(98, 2)) 
+                except:
+                    # Fallback if icon is missing
+                    pass
 
                 buffer_bytes = buffer_copy.tobytes()
 
@@ -155,7 +193,14 @@ class CentaurScreen(common.Singleton):
                     if self._screen_reversed == False:
                         buffer_copy = buffer_copy.rotate(180, expand=True)
                     
-                    self._api.DisplayPartial(self._api.getbuffer(buffer_copy))
+                    if self._hardware_available:
+                        try:
+                            if hasattr(self._api, 'DisplayPartial'):
+                                self._api.DisplayPartial(self._api.getbuffer(buffer_copy))
+                            else:
+                                self._api.display(self._api.getbuffer(buffer_copy))
+                        except Exception as e:
+                            Log.exception(CentaurScreen._screen_thread, e)
                 
                     self._last_buffer_bytes = buffer_bytes
 
@@ -244,35 +289,47 @@ class CentaurScreen(common.Singleton):
         self._last_written_text = ["","","",""]
 
     def draw_fen(self, fen, startrow=2):
+        """Draw a FEN string on the screen, falling back to an empty board if the string is invalid."""
 
         EMPTY_FEN = "8/8/8/8/8/8/8/8 w - - 0 1"
 
         try:
-            if fen == None:
+            # Handle None or empty string
+            if not fen:
                 fen = EMPTY_FEN
 
-            fen = fen.replace("/", "")
+            # Process FEN: remove slashes and expand digits to spaces
+            processed_fen = fen.replace("/", "")
+            for index in range(1, 10): # 1-9
+                processed_fen = processed_fen.replace(str(index), " " * index)
 
-            for index in range(1,9):
-                fen = fen.replace(str(index), " "*index)
+            # Validate processed FEN length for the piece part
+            # A valid FEN piece part should have exactly 64 characters after expansion.
+            # We check if it has AT LEAST 64 characters to be safe for full FENs.
+            if len(processed_fen) < 64:
+                Log.debug(f"Invalid FEN (too short after processing): '{fen}'")
+                fen = EMPTY_FEN
+                processed_fen = fen.replace("/", "")
+                for index in range(1, 10):
+                    processed_fen = processed_fen.replace(str(index), " " * index)
 
             if self._screen_reversed == False:
-                reversed = ""
-                for a in range(8,0,-1):
-                    for b in range(0,8):
-                        reversed = reversed + fen[((a-1)*8)+b]
-                fen = reversed
+                reversed_fen = ""
+                for a in range(8, 0, -1):
+                    for b in range(0, 8):
+                        reversed_fen = reversed_fen + processed_fen[((a - 1) * 8) + b]
+                processed_fen = reversed_fen
             else:
-                reversed = ""
-                for a in range(0,8):
-                    for b in range(0,8):
-                        reversed = reversed + fen[(a*8)+(7-b)]
-                fen = reversed
+                reversed_fen = ""
+                for a in range(0, 8):
+                    for b in range(0, 8):
+                        reversed_fen = reversed_fen + processed_fen[(a * 8) + (7 - b)]
+                processed_fen = reversed_fen
 
-            self.draw_board(fen, startrow)
+            self.draw_board(processed_fen, startrow)
 
         except Exception as e:
-            Log.debug(f"fen:{fen}")
+            Log.debug(f"Error drawing FEN: '{fen}' (processed: '{processed_fen}')")
             Log.exception(CentaurScreen.draw_fen, e)
             pass
 

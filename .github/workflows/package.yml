@@ -7,6 +7,15 @@ on:
 
   # Allows manual triggering from the Actions tab (useful for testing)
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag to create/use for the release (example: 1.0.0)"
+        required: true
+        type: string
+      release_name:
+        description: "Optional release title"
+        required: false
+        type: string
 
 jobs:
   build-and-release:
@@ -29,16 +38,21 @@ jobs:
           node-version: '20.x'
 
       - name: Build the .deb package
-        run: make
+        env:
+          BUILD_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.tag_name }}
+        run: make version="$BUILD_VERSION"
 
       - name: Debug - List built files
         run: |
           ls -la releases/ || echo "No .deb files found in releases/!"
           find . -name "*.deb" || true
 
-      - name: Upload .deb to GitHub Release
+      - name: Create/Update GitHub Release with .deb
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.tag_name }}
+          name: ${{ github.event_name == 'release' && github.event.release.name || github.event.inputs.release_name }}
           files: releases/*.deb
           generate_release_notes: true
         env:
