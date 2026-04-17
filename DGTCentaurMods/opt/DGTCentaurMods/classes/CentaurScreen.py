@@ -19,7 +19,7 @@
 # This and any other notices must remain intact and unaltered in any
 # distribution, modification, variant, or derivative of this software.
 
-from DGTCentaurMods.classes.waveshare import epd2in9d
+# Import removed to support dynamic loading of the display driver
 from DGTCentaurMods.classes.CentaurConfig import CentaurConfig
 
 from DGTCentaurMods.classes import Log
@@ -75,12 +75,23 @@ class CentaurScreen(common.Singleton):
 
             print("Centaur screen initializing...")
 
-            self._api = epd2in9d.EPD()
+            display_version = CentaurConfig.get_system_settings("display_version", "v2").lower()
+            if display_version == "v1":
+                from DGTCentaurMods.classes.waveshare import epd2in9
+                self._api = epd2in9.EPD()
+            else:
+                from DGTCentaurMods.classes.waveshare import epd2in9d
+                self._api = epd2in9d.EPD()
 
             self._buffer = Image.new(B_W_MODE, (SCREEN_WIDTH, SCREEN_HEIGHT), 255)
 
             try:
-                if self._api.init() == 0:
+                if display_version == "v1":
+                    res = self._api.init(self._api.lut_partial_update)
+                else:
+                    res = self._api.init()
+
+                if res == 0:
                     self._hardware_available = True
                     self._api.Clear()
                     self.home_screen("Welcome!")
@@ -166,7 +177,10 @@ class CentaurScreen(common.Singleton):
                     
                     if self._hardware_available:
                         try:
-                            self._api.DisplayPartial(self._api.getbuffer(buffer_copy))
+                            if hasattr(self._api, 'DisplayPartial'):
+                                self._api.DisplayPartial(self._api.getbuffer(buffer_copy))
+                            else:
+                                self._api.display(self._api.getbuffer(buffer_copy))
                         except Exception as e:
                             Log.exception(CentaurScreen._screen_thread, e)
                 
