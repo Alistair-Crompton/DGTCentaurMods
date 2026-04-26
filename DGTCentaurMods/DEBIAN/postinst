@@ -1,16 +1,27 @@
 #!/bin/bash
 
 ARCH=`uname -m`
-CONFIG="/boot/config.txt"
+if [ -f /boot/firmware/config.txt ]
+then
+    CONFIG="/boot/firmware/config.txt"
+else
+    CONFIG="/boot/config.txt"
+fi
 PACKAGE="DGTCentaurMods"
 DGTCM_PATH="/opt/${PACKAGE}"
-CMDLINEFILE="/boot/cmdline.txt"
+if [ -f /boot/firmware/cmdline.txt ]
+then
+    CMDLINEFILE="/boot/firmware/cmdline.txt"
+else
+    CMDLINEFILE="/boot/cmdline.txt"
+fi
 CENTAUR="/home/pi/centaur/"
 CENTAUR_ENGINE="/home/pi/centaur/engines"
 STOCKFISH="stockfish_pi"
 RODENT_REPO="https://github.com/nescitus/rodent-iv.git"
 MAIA_REPO="https://github.com/CSSLab/maia-chess.git"
 FENLOG="/home/pi/centaur/fen.log"
+VENV_PATH="${DGTCM_PATH}/.venv"
 
 
 if ! cat $CONFIG | grep -q "#dgtcentaurmods"
@@ -65,13 +76,28 @@ cd /usr/lib/python3/dist-packages && sudo ln -s ${DGTCM_PATH} ${PACKAGE}
 sudo touch /etc/authbind/byport/80
 sudo chmod 777 /etc/authbind/byport/80
 
+function enableTimeSyncService {
+    # Keep system time sane for TLS/API interactions without forcing a specific daemon.
+    for service in systemd-timesyncd ntpsec ntp chrony
+    do
+        if systemctl list-unit-files "${service}.service" 2>/dev/null | grep -q "^${service}.service"
+        then
+            echo -e "::: Enabling time sync service: ${service}."
+            systemctl enable "${service}.service" >/dev/null 2>&1 || true
+            return
+        fi
+    done
+
+    echo -e "::: No known time sync service found. Skipping enable step."
+}
+
 # Enable systemd services.
 echo -e "::: Setup services."
     systemctl daemon-reload
     systemctl enable ${PACKAGE}Web.service
     systemctl enable ${PACKAGE}Update.service
     systemctl enable ${PACKAGE}.service
-    systemctl enable ntp
+    enableTimeSyncService
 
 systemctl daemon-reload
 
@@ -93,18 +119,30 @@ then
     touch $FENLOG
 fi
 
-# Check if pip is installed
-if sudo dpkg -l | grep -q python3-pip
-then
-    echo "::: Pip is installed."
-else
-    echo "::: Pip not installed. Installing now..."
-    sudo apt-get install -y python3-pip
-fi
-
-echo -e "::: Installing python packages."
+echo -e "::: Creating python virtual environment."
     cd $DGTCM_PATH
-    CFLAGS="-fcommon" pip3 install -r $DGTCM_PATH/config/pip-requirements.txt
+
+    # Always recreate venv to avoid stale pip packages surviving upgrades.
+    if [ -d "${VENV_PATH}" ]
+    then
+        rm -rf "${VENV_PATH}"
+    fi
+
+    python3 -m venv --system-site-packages "${VENV_PATH}"
+    if [ $? -ne 0 ]
+    then
+        echo "::: ERROR: Failed to create virtual environment at ${VENV_PATH}."
+        exit 1
+    fi
+
+echo -e "::: Installing pip-only python packages into virtual environment."
+    "${VENV_PATH}/bin/python" -m pip install --upgrade pip setuptools wheel
+    CFLAGS="-fcommon" "${VENV_PATH}/bin/pip" install -r $DGTCM_PATH/config/pip-requirements.txt
+    if [ $? -ne 0 ]
+    then
+        echo "::: ERROR: Python dependency installation failed in virtual environment."
+        exit 1
+    fi
 
 
 function insertMaia {
@@ -157,9 +195,9 @@ insertZahak
 # Setting final permissions
 function setPermissions {
     echo -e "::: Setting permissions."
-    sudo chown -R pi.pi ${DGTCM_PATH}
-    sudo chown -R pi.root $CENTAUR
-
+    sudo chown -R pi:pi ${DGTCM_PATH}
+    sudo chown -R pi:root $CENTAUR
+    sudo usermod -aG gpio pi
 }
 
 function copyDefaults {

@@ -99,18 +99,8 @@ class CentaurBoard(common.Singleton):
             # We send an initial 0x4d to ask the board to provide its address
             print('Detecting board address...')
 
-            # This is unnecessary.
-            # self.read_from_serial()
-
-            # print('Sending payload 1...')
-            # self.write_to_serial(b'\x4d')
-            # self.read_from_serial()
-
-            # print('Sending payload 2...')
-            # self.write_to_serial(b'\x4e')
-            # self.read_from_serial()
-
-            # print('Serial is open. Waiting for response...')
+            # Robust buffer clearing/accumulation fix
+            self.read_from_serial()
 
             response = b''
 
@@ -119,12 +109,12 @@ class CentaurBoard(common.Singleton):
 
             timeout = time.time() + 10
 
-            while len(response) < 4 and time.time() < timeout:
+            while len(response) < 5 and time.time() < timeout:
 
                 self.write_to_serial(b'\x87\x00\x00\x07')
-                response = self.read_from_serial()
+                response += self.read_from_serial()
                 
-                if len(response) > 4:
+                if len(response) >= 5:
 
                     self._address_1 = response[3]
                     self._address_2 = response[4]
@@ -135,10 +125,10 @@ class CentaurBoard(common.Singleton):
                     print("Address:" + hex(self._address_1) + hex(self._address_2))
                     break
 
-                time.sleep(1)
+                time.sleep(.5)
             
             if self._address_1 == 0 and self._address_2 == 0:
-                Log.exception(CentaurBoard._initialize, "No response from serial!")
+                Log.error(CentaurBoard._initialize, "No response from serial!")
                 Log.info("Board communication has been disabled...")
                 self._disabled = True
                 self._SERIAL.close()

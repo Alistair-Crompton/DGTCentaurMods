@@ -5,7 +5,7 @@ After=network.target
 [Service]
 RemainAfterExit=no
 Environment=PYTHONUNBUFFERED=1
-ExecStart=python3 /opt/DGTCentaurMods/scripts/auto_update.py
+ExecStart=/opt/DGTCentaurMods/.venv/bin/python /opt/DGTCentaurMods/scripts/auto_update.py
 Restart=no
 User=pi
 

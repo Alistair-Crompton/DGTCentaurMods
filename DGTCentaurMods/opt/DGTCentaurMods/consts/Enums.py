@@ -19,8 +19,7 @@
 # This and any other notices must remain intact and unaltered in any
 # distribution, modification, variant, or derivative of this software.
 
-from flags import Flags
-from enum import Enum
+from enum import Enum, IntFlag
 
 class Sound(Enum):
     MUSIC = 1
@@ -61,7 +60,7 @@ class SquareType(Enum):
     ORIGIN = 1
     TARGET = 2
 
-class BoardOption(Flags):
+class BoardOption(IntFlag):
     CAN_FORCE_MOVES = 1
     CAN_UNDO_MOVES = 2
     DB_RECORD_DISABLED = 4

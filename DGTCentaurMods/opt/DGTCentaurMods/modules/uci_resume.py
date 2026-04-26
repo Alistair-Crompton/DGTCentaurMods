@@ -31,10 +31,16 @@ def main():
     if last_uci == "1vs1_module":
         uci_module = importlib.import_module(name=f".modules.1vs1_module", package=consts.MAIN_ID)
         uci_module.main()
-    else:
+    elif last_uci:
         uci_module = importlib.import_module(name=f".modules.uci_module", package=consts.MAIN_ID)
         # We unpack the last_uci args
         uci_module.main(*shlex.split(last_uci))
+    else:
+        from DGTCentaurMods.classes import CentaurScreen
+        import time
+        screen = CentaurScreen.get()
+        screen.home_screen("No game to resume!")
+        time.sleep(2)
 
 if __name__ == '__main__':
     main()
